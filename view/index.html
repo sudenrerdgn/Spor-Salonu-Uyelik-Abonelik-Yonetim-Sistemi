@@ -1265,7 +1265,7 @@ Gemini
         </main>
     </div>
 
-    <!-- ─── MODAL ─── -->
+    <!-- ─── MODAL (Yeni Üye Ekle) ─── -->
     <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
         <div class="modal">
             <h2>Yeni Üye Ekle</h2>
@@ -1343,6 +1343,76 @@ Gemini
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeModal()">İptal</button>
                 <button class="btn-primary" onclick="addMember()"><i class="fas fa-check"></i> Üye Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── EDIT MEMBER MODAL ─── -->
+    <div class="modal-overlay" id="editMemberModal" onclick="if(event.target===this)closeEditModal()">
+        <div class="modal" style="width:520px;">
+            <h2><i class="fas fa-user-pen" style="color:var(--accent-purple);margin-right:8px;"></i>Üye Düzenle</h2>
+            <p>Üye bilgilerini güncelleyin.</p>
+            <input type="hidden" id="editId">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Ad</label>
+                    <input type="text" id="editAd" placeholder="Ad">
+                </div>
+                <div class="form-field">
+                    <label>Soyad</label>
+                    <input type="text" id="editSoyad" placeholder="Soyad">
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>E-posta</label>
+                    <input type="email" id="editEmail" placeholder="email@mail.com">
+                </div>
+                <div class="form-field">
+                    <label>Telefon</label>
+                    <input type="text" id="editTelefon" placeholder="0532 xxx xx xx">
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Cinsiyet</label>
+                    <select id="editCinsiyet">
+                        <option value="">Seçiniz</option>
+                        <option value="Erkek">Erkek</option>
+                        <option value="Kadın">Kadın</option>
+                        <option value="Belirtilmemiş">Belirtilmemiş</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Durum</label>
+                    <select id="editDurum">
+                        <option value="aktif">Aktif</option>
+                        <option value="pasif">Pasif</option>
+                        <option value="askida">Askıda</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeEditModal()">İptal</button>
+                <button class="btn-primary" onclick="submitEditMember()"><i class="fas fa-save"></i> Güncelle</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DELETE CONFIRM MODAL ─── -->
+    <div class="modal-overlay" id="deleteMemberModal" onclick="if(event.target===this)closeDeleteModal()">
+        <div class="modal" style="width:420px;text-align:center;">
+            <div style="width:60px;height:60px;border-radius:50%;background:rgba(239,68,68,.15);display:grid;place-items:center;margin:0 auto 16px;">
+                <i class="fas fa-trash" style="font-size:22px;color:#f87171;"></i>
+            </div>
+            <h2 style="margin-bottom:8px;">Üyeyi Sil</h2>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">Bu üyeyi silmek istediğinizden emin misiniz?</p>
+            <p id="deleteConfirmName" style="font-weight:600;color:var(--text-primary);font-size:15px;margin-bottom:20px;"></p>
+            <p style="color:#f87171;font-size:12px;margin-bottom:20px;"><i class="fas fa-exclamation-triangle"></i> Bu işlem geri alınamaz!</p>
+            <input type="hidden" id="deleteId">
+            <div class="modal-actions" style="justify-content:center;">
+                <button class="btn-cancel" onclick="closeDeleteModal()">İptal</button>
+                <button class="btn-primary" style="background:linear-gradient(135deg,#ef4444,#dc2626);" onclick="submitDeleteMember()"><i class="fas fa-trash"></i> Sil</button>
             </div>
         </div>
     </div>

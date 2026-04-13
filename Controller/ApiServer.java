@@ -508,13 +508,51 @@ public class ApiServer {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 int uid = Integer.parseInt(idStr);
 
-                // Önce bağımlı tablolardan sil (uyeler → abonelikler vs.)
-                PreparedStatement delUye = conn.prepareStatement("DELETE FROM uyeler WHERE kullanici_id = ?");
-                delUye.setInt(1, uid);
-                delUye.executeUpdate();
-                delUye.close();
+                // 1) uye_id'yi bul
+                PreparedStatement findUye = conn.prepareStatement("SELECT uye_id FROM uyeler WHERE kullanici_id = ?");
+                findUye.setInt(1, uid);
+                ResultSet uyeRs = findUye.executeQuery();
+                int uyeId = -1;
+                if (uyeRs.next()) {
+                    uyeId = uyeRs.getInt("uye_id");
+                }
+                uyeRs.close();
+                findUye.close();
 
-                // Kullanıcıyı sil
+                if (uyeId > 0) {
+                    // 2) Ödemeleri sil (odemeler → uye_abonelikleri FK)
+                    PreparedStatement delOdeme = conn.prepareStatement(
+                        "DELETE FROM odemeler WHERE abonelik_id IN (SELECT abonelik_id FROM uye_abonelikleri WHERE uye_id = ?)");
+                    delOdeme.setInt(1, uyeId);
+                    delOdeme.executeUpdate();
+                    delOdeme.close();
+
+                    // 3) Sınıf rezervasyonlarını sil
+                    PreparedStatement delRez = conn.prepareStatement("DELETE FROM sinif_rezervasyonlari WHERE uye_id = ?");
+                    delRez.setInt(1, uyeId);
+                    delRez.executeUpdate();
+                    delRez.close();
+
+                    // 4) Abonelikleri sil
+                    PreparedStatement delAbo = conn.prepareStatement("DELETE FROM uye_abonelikleri WHERE uye_id = ?");
+                    delAbo.setInt(1, uyeId);
+                    delAbo.executeUpdate();
+                    delAbo.close();
+
+                    // 5) Üye kaydını sil
+                    PreparedStatement delUye = conn.prepareStatement("DELETE FROM uyeler WHERE uye_id = ?");
+                    delUye.setInt(1, uyeId);
+                    delUye.executeUpdate();
+                    delUye.close();
+                }
+
+                // 6) Giriş/çıkış kayıtlarını sil
+                PreparedStatement delGiris = conn.prepareStatement("DELETE FROM giris_cikis_kayitlari WHERE kullanici_id = ?");
+                delGiris.setInt(1, uid);
+                delGiris.executeUpdate();
+                delGiris.close();
+
+                // 7) Kullanıcıyı sil
                 PreparedStatement stmt = conn.prepareStatement("DELETE FROM kullanicilar WHERE kullanici_id = ?");
                 stmt.setInt(1, uid);
                 int deleted = stmt.executeUpdate();
@@ -522,7 +560,7 @@ public class ApiServer {
 
                 if (deleted > 0) {
                     System.out.println("✅ Üye silindi: ID=" + uid);
-                    sendResponse(exchange, 200, "{\"basarili\":true,\"mesaj\":\"Üye silindi!\"}");
+                    sendResponse(exchange, 200, "{\"basarili\":true,\"mesaj\":\"Üye başarıyla silindi!\"}");
                 } else {
                     sendResponse(exchange, 404, "{\"basarili\":false,\"mesaj\":\"Üye bulunamadı!\"}");
                 }

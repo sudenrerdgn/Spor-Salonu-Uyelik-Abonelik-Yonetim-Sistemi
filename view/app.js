@@ -142,7 +142,20 @@ function loadMembersFromAPI() {
 }
 
 function apiDeleteMember(id) {
-  if (!confirm('Bu üyeyi silmek istediğinizden emin misiniz?')) return;
+  const m = apiMembers.find(u => u.id === id);
+  if (!m) { showToast('Üye bulunamadı!'); return; }
+  document.getElementById('deleteId').value = id;
+  document.getElementById('deleteConfirmName').textContent = m.name || (m.ad + ' ' + m.soyad);
+  document.getElementById('deleteMemberModal').classList.add('open');
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteMemberModal').classList.remove('open');
+}
+
+function submitDeleteMember() {
+  const id = document.getElementById('deleteId').value;
+  closeDeleteModal();
   fetch(API_URL + '/api/uye-sil', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -159,23 +172,41 @@ function apiDeleteMember(id) {
 function apiEditMember(id) {
   const m = apiMembers.find(u => u.id === id);
   if (!m) { showToast('Üye bulunamadı!'); return; }
+  document.getElementById('editId').value = id;
+  document.getElementById('editAd').value = m.ad || '';
+  document.getElementById('editSoyad').value = m.soyad || '';
+  document.getElementById('editEmail').value = m.email || '';
+  document.getElementById('editTelefon').value = m.telefon || '';
+  document.getElementById('editCinsiyet').value = m.cinsiyet || '';
+  document.getElementById('editDurum').value = m.durum || 'aktif';
+  document.getElementById('editMemberModal').classList.add('open');
+}
 
-  const yeniAd = prompt('Ad:', m.ad);
-  if (yeniAd === null) return;
-  const yeniSoyad = prompt('Soyad:', m.soyad);
-  if (yeniSoyad === null) return;
-  const yeniEmail = prompt('Email:', m.email);
-  if (yeniEmail === null) return;
-  const yeniTelefon = prompt('Telefon:', m.telefon);
-  const yeniDurum = prompt('Durum (aktif/pasif/askida):', m.durum);
+function closeEditModal() {
+  document.getElementById('editMemberModal').classList.remove('open');
+}
 
+function submitEditMember() {
+  const id = document.getElementById('editId').value;
+  const ad = document.getElementById('editAd').value.trim();
+  const soyad = document.getElementById('editSoyad').value.trim();
+  const email = document.getElementById('editEmail').value.trim();
+  const telefon = document.getElementById('editTelefon').value.trim();
+  const durum = document.getElementById('editDurum').value;
+
+  if (!ad || !soyad || !email) {
+    showToast('Ad, soyad ve e-posta zorunludur!');
+    return;
+  }
+
+  closeEditModal();
   fetch(API_URL + '/api/uye-guncelle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      id: String(id), ad: yeniAd, soyad: yeniSoyad,
-      email: yeniEmail, telefon: yeniTelefon || '',
-      durum: yeniDurum || 'aktif'
+      id: String(id), ad, soyad,
+      email, telefon: telefon || '',
+      durum: durum || 'aktif'
     })
   })
   .then(r => r.json())
