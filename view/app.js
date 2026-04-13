@@ -68,8 +68,8 @@ function renderMembers(data) {
             </div>
           </div>
         </td>
+        <td style="color:var(--text-muted);font-size:12px">${m.uyelikNo || ''}</td>
         <td style="color:var(--text-muted);font-size:12px">${m.telefon || ''}</td>
-        <td style="color:var(--text-muted);font-size:12px">${m.rol || ''}</td>
         <td><span class="status-dot ${durum}">${statusLabel[durum] || durum}</span></td>
         <td style="color:var(--text-muted);font-size:12px">${m.kayitTarihi || ''}</td>
         <td>
@@ -131,7 +131,10 @@ function loadMembersFromAPI() {
         name: u.ad + ' ' + u.soyad,
         email: u.email, telefon: u.telefon || '',
         cinsiyet: u.cinsiyet || '', rol: u.rol,
-        durum: u.durum, kayitTarihi: u.kayitTarihi || ''
+        durum: u.durum, kayitTarihi: u.kayitTarihi || '',
+        uyelikNo: u.uyelikNo || '', dogumTarihi: u.dogumTarihi || '',
+        abonelikPlan: u.abonelikPlan || '', abonelikBitis: u.abonelikBitis || '',
+        abonelikDurum: u.abonelikDurum || ''
       }));
       return apiMembers;
     })
@@ -757,16 +760,20 @@ function renderUyelerPageTable(list) {
   const tbody = document.getElementById('uyelerTableBody');
   if (!tbody) return;
   const statusLabel = { aktif:'Aktif', pasif:'Pasif', suresi_doldu:'Süresi Doldu', askida:'Askıda' };
+  const abonelikLabel = { aktif:'Aktif', pasif:'Pasif', iptal:'İptal', suresi_doldu:'Süresi Doldu' };
   tbody.innerHTML = '';
   list.forEach((m, idx) => {
     const color = avatarColors[idx % avatarColors.length];
     const name = m.name || (m.ad + ' ' + m.soyad);
     const durum = m.status || m.durum || 'aktif';
+    const abDurum = m.abonelikDurum || '';
+    const abClass = abDurum === 'aktif' ? 'aktif' : abDurum === 'suresi_doldu' ? 'suresi_doldu' : 'pasif';
     tbody.innerHTML += `<tr>
       <td><div class="member-info"><div class="m-avatar" style="background:${color}">${getInitials(name)}</div><div><div class="m-name">${name}</div><div class="m-email">${m.email}</div></div></div></td>
+      <td style="color:var(--text-muted);font-size:12px">${m.uyelikNo || ''}</td>
       <td style="color:var(--text-muted);font-size:12px">${m.telefon || ''}</td>
       <td style="color:var(--text-muted);font-size:12px">${m.cinsiyet || ''}</td>
-      <td style="color:var(--text-muted);font-size:12px">${m.rol || ''}</td>
+      <td style="color:var(--text-muted);font-size:12px">${m.abonelikPlan || '-'}</td>
       <td><span class="status-dot ${durum}">${statusLabel[durum]||durum}</span></td>
       <td style="color:var(--text-muted);font-size:12px">${m.kayitTarihi || ''}</td>
       <td><div style="display:flex;gap:6px"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="apiEditMember(${m.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="apiDeleteMember(${m.id})"><i class="fas fa-trash" style="color:#f87171"></i></div></div></td></tr>`;

@@ -208,9 +208,10 @@ public class ApiServer {
                 rolRs.close();
                 rolStmt.close();
 
-                // 3) Kaydet
+                // 3) Kaydet (SCOPE_IDENTITY ile yeni ID'yi al)
                 PreparedStatement stmt = conn.prepareStatement(
-                        "INSERT INTO kullanicilar (ad, soyad, email, sifre_hash, telefon, cinsiyet, dogum_tarihi, rol_id, durum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, N'aktif')");
+                        "INSERT INTO kullanicilar (ad, soyad, email, sifre_hash, telefon, cinsiyet, dogum_tarihi, rol_id, durum) VALUES (?, ?, ?, ?, ?, ?, ?, ?, N'aktif')",
+                        Statement.RETURN_GENERATED_KEYS);
                 stmt.setString(1, ad);
                 stmt.setString(2, soyad);
                 stmt.setString(3, email.toLowerCase());
@@ -226,7 +227,36 @@ public class ApiServer {
                 
                 stmt.setInt(8, rolId);
                 stmt.executeUpdate();
+
+                // Yeni kullanici_id'yi al
+                ResultSet generatedKeys = stmt.getGeneratedKeys();
+                int yeniKullaniciId = -1;
+                if (generatedKeys.next()) {
+                    yeniKullaniciId = generatedKeys.getInt(1);
+                }
+                generatedKeys.close();
                 stmt.close();
+
+                // 4) Eğer rol 'uye' ise uyeler tablosuna da ekle
+                if ("uye".equals(rol) && yeniKullaniciId > 0) {
+                    // Sıradaki üyelik numarasını hesapla
+                    Statement countStmt = conn.createStatement();
+                    ResultSet countRs = countStmt.executeQuery("SELECT COUNT(*) AS cnt FROM uyeler");
+                    int mevcutUyeSayisi = countRs.next() ? countRs.getInt("cnt") : 0;
+                    countRs.close();
+                    countStmt.close();
+
+                    String yil = String.valueOf(java.time.Year.now().getValue());
+                    String uyelikNo = String.format("FZ-%s-%03d", yil, mevcutUyeSayisi + 1);
+
+                    PreparedStatement uyeStmt = conn.prepareStatement(
+                            "INSERT INTO uyeler (kullanici_id, uyelik_no) VALUES (?, ?)");
+                    uyeStmt.setInt(1, yeniKullaniciId);
+                    uyeStmt.setString(2, uyelikNo);
+                    uyeStmt.executeUpdate();
+                    uyeStmt.close();
+                    System.out.println("   → Üye kaydı oluşturuldu: " + uyelikNo);
+                }
 
                 System.out.println("✅ Yeni kullanıcı kaydedildi: " + ad + " " + soyad + " (" + email + ")");
                 sendResponse(exchange, 200, "{\"basarili\":true,\"mesaj\":\"Kayıt başarılı!\"}");
@@ -331,8 +361,18 @@ public class ApiServer {
                 Statement stmt = conn.createStatement();
                 ResultSet rs = stmt.executeQuery(
                         "SELECT k.kullanici_id, k.ad, k.soyad, k.email, k.telefon, k.cinsiyet, " +
-                        "r.rol_adi, k.durum, k.kayit_tarihi " +
-                        "FROM kullanicilar k JOIN roller r ON k.rol_id = r.role_id " +
+                        "k.dogum_tarihi, r.rol_adi, k.durum, k.kayit_tarihi, " +
+                        "u.uyelik_no, " +
+                        "p.plan_adi AS abonelik_plan, " +
+                        "a.bitis_tarihi AS abonelik_bitis, " +
+                        "a.durum AS abonelik_durum " +
+                        "FROM kullanicilar k " +
+                        "JOIN roller r ON k.rol_id = r.role_id " +
+                        "LEFT JOIN uyeler u ON k.kullanici_id = u.kullanici_id " +
+                        "LEFT JOIN (SELECT uye_id, plan_id, bitis_tarihi, durum, " +
+                        "ROW_NUMBER() OVER(PARTITION BY uye_id ORDER BY baslangic_tarihi DESC) AS rn " +
+                        "FROM uye_abonelikleri) a ON u.uye_id = a.uye_id AND a.rn = 1 " +
+                        "LEFT JOIN uye_planlari p ON a.plan_id = p.plan_id " +
                         "WHERE r.rol_adi = N'uye' " +
                         "ORDER BY k.kullanici_id");
 
@@ -342,11 +382,19 @@ public class ApiServer {
                     if (!first) json.append(",");
                     String telefon = rs.getString("telefon");
                     String cinsiyet = rs.getString("cinsiyet");
+                    String uyelikNo = rs.getString("uyelik_no");
+                    String abonelikPlan = rs.getString("abonelik_plan");
+                    String abonelikBitis = rs.getString("abonelik_bitis");
+                    String abonelikDurum = rs.getString("abonelik_durum");
                     Timestamp kayitTs = rs.getTimestamp("kayit_tarihi");
                     String kayitTarihi = kayitTs != null ? kayitTs.toString().substring(0, 10) : "";
+                    java.sql.Date dogumDate = rs.getDate("dogum_tarihi");
+                    String dogumTarihi = dogumDate != null ? dogumDate.toString() : "";
                     json.append(String.format(
                             "{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\"," +
-                            "\"telefon\":\"%s\",\"cinsiyet\":\"%s\"," +
+                            "\"telefon\":\"%s\",\"cinsiyet\":\"%s\",\"dogumTarihi\":\"%s\"," +
+                            "\"uyelikNo\":\"%s\"," +
+                            "\"abonelikPlan\":\"%s\",\"abonelikBitis\":\"%s\",\"abonelikDurum\":\"%s\"," +
                             "\"rol\":\"%s\",\"durum\":\"%s\",\"kayitTarihi\":\"%s\"}",
                             rs.getInt("kullanici_id"),
                             rs.getString("ad"),
@@ -354,6 +402,11 @@ public class ApiServer {
                             rs.getString("email"),
                             telefon != null ? telefon : "",
                             cinsiyet != null ? cinsiyet : "",
+                            dogumTarihi,
+                            uyelikNo != null ? uyelikNo : "",
+                            abonelikPlan != null ? abonelikPlan : "",
+                            abonelikBitis != null ? abonelikBitis : "",
+                            abonelikDurum != null ? abonelikDurum : "",
                             rs.getString("rol_adi"),
                             rs.getString("durum"),
                             kayitTarihi
