@@ -332,7 +332,9 @@ public class ApiServer {
                 ResultSet rs = stmt.executeQuery(
                         "SELECT k.kullanici_id, k.ad, k.soyad, k.email, k.telefon, k.cinsiyet, " +
                         "r.rol_adi, k.durum, k.kayit_tarihi " +
-                        "FROM kullanicilar k JOIN roller r ON k.rol_id = r.role_id");
+                        "FROM kullanicilar k JOIN roller r ON k.rol_id = r.role_id " +
+                        "WHERE r.rol_adi = N'uye' " +
+                        "ORDER BY k.kullanici_id");
 
                 StringBuilder json = new StringBuilder("[");
                 boolean first = true;
@@ -491,46 +493,82 @@ public class ApiServer {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 Statement stmt = conn.createStatement();
 
-                // Toplam üye sayısı
-                ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) AS cnt FROM uyeler");
+                // Toplam üye sayısı (sadece 'uye' rolü)
+                ResultSet rs1 = stmt.executeQuery(
+                    "SELECT COUNT(*) AS cnt FROM kullanicilar k " +
+                    "JOIN roller r ON k.rol_id = r.role_id WHERE r.rol_adi = N'uye'");
                 int toplamUye = rs1.next() ? rs1.getInt("cnt") : 0;
                 rs1.close();
 
-                // Aktif abonelik sayısı
-                ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) AS cnt FROM uye_abonelikleri WHERE durum = N'aktif'");
-                int aktifAbonelik = rs2.next() ? rs2.getInt("cnt") : 0;
+                // Aktif üye sayısı
+                ResultSet rs2 = stmt.executeQuery(
+                    "SELECT COUNT(*) AS cnt FROM kullanicilar k " +
+                    "JOIN roller r ON k.rol_id = r.role_id " +
+                    "WHERE r.rol_adi = N'uye' AND k.durum = N'aktif'");
+                int aktifUye = rs2.next() ? rs2.getInt("cnt") : 0;
                 rs2.close();
 
-                // Süresi dolan abonelik sayısı
-                ResultSet rs3 = stmt.executeQuery("SELECT COUNT(*) AS cnt FROM uye_abonelikleri WHERE durum = N'suresi_doldu'");
-                int suresiDolan = rs3.next() ? rs3.getInt("cnt") : 0;
+                // Pasif üye sayısı
+                ResultSet rs3 = stmt.executeQuery(
+                    "SELECT COUNT(*) AS cnt FROM kullanicilar k " +
+                    "JOIN roller r ON k.rol_id = r.role_id " +
+                    "WHERE r.rol_adi = N'uye' AND k.durum = N'pasif'");
+                int pasifUye = rs3.next() ? rs3.getInt("cnt") : 0;
                 rs3.close();
 
-                // Bu ay gelir (tamamlanan ödemeler)
+                // Süresi dolan abonelik sayısı
                 ResultSet rs4 = stmt.executeQuery(
-                    "SELECT ISNULL(SUM(miktar), 0) AS toplam FROM odemeler " +
-                    "WHERE durum = N'tamamlandi' AND MONTH(odeme_tarihi) = MONTH(GETDATE()) AND YEAR(odeme_tarihi) = YEAR(GETDATE())");
-                double buAyGelir = rs4.next() ? rs4.getDouble("toplam") : 0;
+                    "SELECT COUNT(*) AS cnt FROM uye_abonelikleri WHERE durum = N'suresi_doldu'");
+                int suresiDolan = rs4.next() ? rs4.getInt("cnt") : 0;
                 rs4.close();
 
-                // Toplam gelir (tüm tamamlanan ödemeler)
-                ResultSet rs5 = stmt.executeQuery("SELECT ISNULL(SUM(miktar), 0) AS toplam FROM odemeler WHERE durum = N'tamamlandi'");
-                double toplamGelir = rs5.next() ? rs5.getDouble("toplam") : 0;
+                // Bu ay gelir (tamamlanan ödemeler)
+                ResultSet rs5 = stmt.executeQuery(
+                    "SELECT ISNULL(SUM(miktar), 0) AS toplam FROM odemeler " +
+                    "WHERE durum = N'tamamlandi' AND MONTH(odeme_tarihi) = MONTH(GETDATE()) AND YEAR(odeme_tarihi) = YEAR(GETDATE())");
+                double buAyGelir = rs5.next() ? rs5.getDouble("toplam") : 0;
                 rs5.close();
 
-                // Bugün içeride olan üye sayısı
+                // Toplam gelir
                 ResultSet rs6 = stmt.executeQuery(
+                    "SELECT ISNULL(SUM(miktar), 0) AS toplam FROM odemeler WHERE durum = N'tamamlandi'");
+                double toplamGelir = rs6.next() ? rs6.getDouble("toplam") : 0;
+                rs6.close();
+
+                // Bugün içeride olan üye sayısı
+                ResultSet rs7 = stmt.executeQuery(
                     "SELECT COUNT(*) AS cnt FROM giris_cikis_kayitlari " +
                     "WHERE durum = N'giris' AND CAST(giris_saat AS DATE) = CAST(GETDATE() AS DATE)");
-                int bugunIceride = rs6.next() ? rs6.getInt("cnt") : 0;
-                rs6.close();
+                int bugunIceride = rs7.next() ? rs7.getInt("cnt") : 0;
+                rs7.close();
+
+                // Bu ay yeni kaydolan üye sayısı
+                ResultSet rs8 = stmt.executeQuery(
+                    "SELECT COUNT(*) AS cnt FROM kullanicilar k " +
+                    "JOIN roller r ON k.rol_id = r.role_id " +
+                    "WHERE r.rol_adi = N'uye' " +
+                    "AND MONTH(k.kayit_tarihi) = MONTH(GETDATE()) " +
+                    "AND YEAR(k.kayit_tarihi) = YEAR(GETDATE())");
+                int buAyYeniKayit = rs8.next() ? rs8.getInt("cnt") : 0;
+                rs8.close();
+
+                // Aktif abonelik sayısı (geriye dönük uyumluluk)
+                ResultSet rs9 = stmt.executeQuery(
+                    "SELECT COUNT(*) AS cnt FROM uye_abonelikleri WHERE durum = N'aktif'");
+                int aktifAbonelik = rs9.next() ? rs9.getInt("cnt") : 0;
+                rs9.close();
 
                 stmt.close();
 
                 String json = String.format(
-                    "{\"toplamUye\":%d,\"aktifAbonelik\":%d,\"suresiDolan\":%d," +
-                    "\"buAyGelir\":%.2f,\"toplamGelir\":%.2f,\"bugunIceride\":%d}",
-                    toplamUye, aktifAbonelik, suresiDolan, buAyGelir, toplamGelir, bugunIceride);
+                    "{\"toplamUye\":%d,\"aktifUye\":%d,\"pasifUye\":%d," +
+                    "\"suresiDolan\":%d,\"aktifAbonelik\":%d," +
+                    "\"buAyGelir\":%.2f,\"toplamGelir\":%.2f," +
+                    "\"bugunIceride\":%d,\"buAyYeniKayit\":%d}",
+                    toplamUye, aktifUye, pasifUye,
+                    suresiDolan, aktifAbonelik,
+                    buAyGelir, toplamGelir,
+                    bugunIceride, buAyYeniKayit);
                 sendResponse(exchange, 200, json);
 
             } catch (SQLException e) {

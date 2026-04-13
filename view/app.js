@@ -85,16 +85,24 @@ function renderMembers(data) {
 }
 
 function filterMembers(q) {
-  filtered = members.filter(m => m.name.toLowerCase().includes(q.toLowerCase()) || m.email.toLowerCase().includes(q.toLowerCase()));
+  const source = apiMembers.length > 0 ? apiMembers : members;
+  filtered = source.filter(m => {
+    const name = m.name || (m.ad + ' ' + m.soyad);
+    return name.toLowerCase().includes(q.toLowerCase()) || m.email.toLowerCase().includes(q.toLowerCase());
+  });
   const st = document.getElementById('statusFilter').value;
-  if (st !== 'hepsi') filtered = filtered.filter(m => m.status === st);
+  if (st !== 'hepsi') filtered = filtered.filter(m => (m.status || m.durum) === st);
   renderMembers(filtered);
 }
 
 function filterByStatus(st) {
   const q = document.getElementById('searchInput').value;
-  filtered = members.filter(m => m.name.toLowerCase().includes(q.toLowerCase()) || m.email.toLowerCase().includes(q.toLowerCase()));
-  if (st !== 'hepsi') filtered = filtered.filter(m => m.status === st);
+  const source = apiMembers.length > 0 ? apiMembers : members;
+  filtered = source.filter(m => {
+    const name = m.name || (m.ad + ' ' + m.soyad);
+    return name.toLowerCase().includes(q.toLowerCase()) || m.email.toLowerCase().includes(q.toLowerCase());
+  });
+  if (st !== 'hepsi') filtered = filtered.filter(m => (m.status || m.durum) === st);
   renderMembers(filtered);
 }
 
@@ -183,6 +191,8 @@ function refreshMemberViews() {
     const se = document.getElementById('sidebarMemberCount');
     if (te) te.textContent = data.length;
     if (se) se.textContent = data.length;
+    // Üyeler sayfası stat kartlarını da güncelle
+    loadDashboardStats();
   });
 }
 
@@ -559,9 +569,18 @@ function loadDashboardStats() {
       const sb  = document.getElementById('sidebarMemberCount');
       if (el1) el1.textContent = data.toplamUye;
       if (el2) el2.textContent = '₺' + Number(data.buAyGelir).toLocaleString('tr-TR');
-      if (el3) el3.textContent = data.aktifAbonelik;
+      if (el3) el3.textContent = data.aktifUye;
       if (el4) el4.textContent = data.suresiDolan;
       if (sb)  sb.textContent  = data.toplamUye;
+      // Üyeler sayfası stat kartlarını da güncelle
+      const u1 = document.getElementById('uyelerToplamUye');
+      const u2 = document.getElementById('uyelerAktifUye');
+      const u3 = document.getElementById('uyelerSuresiDolan');
+      const u4 = document.getElementById('uyelerBuAyYeni');
+      if (u1) u1.textContent = data.toplamUye;
+      if (u2) u2.textContent = data.aktifUye;
+      if (u3) u3.textContent = data.suresiDolan;
+      if (u4) u4.textContent = data.buAyYeniKayit;
     })
     .catch(() => console.log('İstatistik API bağlantısı yok'));
 }
@@ -867,6 +886,7 @@ function renderOdemelerTable(data) {
 
 function renderOdemelerPage() {
   fetch(API_URL + '/api/odemeler').then(r => r.json()).then(apiData => {
+    odemelerCachedData = apiData;
     const currentProfile = roleProfiles[currentRole];
     const veri = currentRole === 'uye'
       ? apiData.filter(o => o.uye === currentProfile.name)
@@ -885,16 +905,19 @@ function renderOdemelerPage() {
     if (elTam)    elTam.textContent    = tamamlanan;
     if (elIade)   elIade.textContent   = iade;
   }).catch(() => {
+    odemelerCachedData = odemelerData;
     const currentProfile = roleProfiles[currentRole];
     const veri = currentRole === 'uye' ? odemelerData.filter(o => o.uye === currentProfile.name) : odemelerData;
     renderOdemelerTable(veri);
   });
 }
+let odemelerCachedData = [];
 function filterOdemeler(st) {
   const currentProfile = roleProfiles[currentRole];
+  const source = odemelerCachedData.length > 0 ? odemelerCachedData : odemelerData;
   let veri = currentRole === 'uye'
-    ? odemelerData.filter(o => o.uye === currentProfile.name)
-    : odemelerData;
+    ? source.filter(o => o.uye === currentProfile.name)
+    : source;
   renderOdemelerTable(st === 'hepsi' ? veri : veri.filter(o => o.durum === st));
 }
 
@@ -927,29 +950,64 @@ const rezervasyonData = [
 ];
 
 function renderDerslerPage() {
-  const dTb = document.getElementById('derslerTableBody');
-  if (dTb) { dTb.innerHTML = ''; derslerDemoData.forEach(d => {
-    dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${d.icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot aktif">Aktif</span></td></tr>`;
-  });}
-  const pTb = document.getElementById('programTableBody');
-  if (pTb) { pTb.innerHTML = ''; programData.forEach(p => {
-    pTb.innerHTML += `<tr><td style="font-weight:600;font-size:13px">${p.gun}</td><td style="color:var(--text-muted);font-size:12px">${p.ders}</td><td style="color:var(--text-muted);font-size:12px">${p.saat}</td><td style="color:var(--text-muted);font-size:12px">${p.salon}</td><td><span class="status-dot aktif">Aktif</span></td></tr>`;
-  });}
-  const rTb = document.getElementById('rezervasyonTableBody');
-  const rDurum = { aktif:'Aktif', iptal:'İptal', tamamlandi:'Tamamlandı' };
-  // Üye rolünde ÜYE sütununu gizle, sadece kendi rezervasyonlarını göster
-  const isUye = currentRole === 'uye';
-  const currentProfile = roleProfiles[currentRole];
-  const uyeSutunu = document.getElementById('rezervasyonUyeTh');
-  if (uyeSutunu) uyeSutunu.style.display = isUye ? 'none' : '';
-  let filteredRezervasyonlar = isUye
-    ? rezervasyonData.filter(r => r.uye === currentProfile.name)
-    : rezervasyonData;
-  if (rTb) { rTb.innerHTML = ''; filteredRezervasyonlar.forEach((r, idx) => {
-    const color = avatarColors[idx % avatarColors.length];
-    const uyeCell = isUye ? '' : `<td><div class="member-info"><div class="m-avatar" style="background:${color};width:30px;height:30px;font-size:11px;border-radius:8px">${getInitials(r.uye)}</div><div class="m-name">${r.uye}</div></div></td>`;
-    rTb.innerHTML += `<tr>${uyeCell}<td style="color:var(--text-muted);font-size:12px">${r.ders}</td><td style="color:var(--text-muted);font-size:12px">${r.tarih}</td><td style="color:var(--text-muted);font-size:12px">${r.saat}</td><td><span class="status-dot ${r.durum}">${rDurum[r.durum]}</span></td></tr>`;
-  });}
+  fetch(API_URL + '/api/dersler').then(r => r.json()).then(data => {
+    const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️', 'Yüzme':'🏊', 'Pilates':'🤸' };
+    const dTb = document.getElementById('derslerTableBody');
+    if (dTb) {
+      dTb.innerHTML = '';
+      data.dersler.forEach(d => {
+        const icon = iconMap[d.kategori] || '📋';
+        dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot ${d.durum}">${d.durum === 'aktif' ? 'Aktif' : d.durum}</span></td></tr>`;
+      });
+    }
+    const pTb = document.getElementById('programTableBody');
+    if (pTb) {
+      pTb.innerHTML = '';
+      data.program.forEach(p => {
+        pTb.innerHTML += `<tr><td style="font-weight:600;font-size:13px">${p.gun}</td><td style="color:var(--text-muted);font-size:12px">${p.ders}</td><td style="color:var(--text-muted);font-size:12px">${p.saat}</td><td style="color:var(--text-muted);font-size:12px">${p.salon}</td><td><span class="status-dot aktif">Aktif</span></td></tr>`;
+      });
+    }
+    const rTb = document.getElementById('rezervasyonTableBody');
+    const rDurum = { aktif:'Aktif', iptal:'İptal', tamamlandi:'Tamamlandı' };
+    const isUye = currentRole === 'uye';
+    const currentProfile = roleProfiles[currentRole];
+    const uyeSutunu = document.getElementById('rezervasyonUyeTh');
+    if (uyeSutunu) uyeSutunu.style.display = isUye ? 'none' : '';
+    let filteredRez = isUye
+      ? data.rezervasyonlar.filter(r => r.uye === currentProfile.name)
+      : data.rezervasyonlar;
+    if (rTb) {
+      rTb.innerHTML = '';
+      filteredRez.forEach((r, idx) => {
+        const color = avatarColors[idx % avatarColors.length];
+        const uyeCell = isUye ? '' : `<td><div class="member-info"><div class="m-avatar" style="background:${color};width:30px;height:30px;font-size:11px;border-radius:8px">${getInitials(r.uye)}</div><div class="m-name">${r.uye}</div></div></td>`;
+        rTb.innerHTML += `<tr>${uyeCell}<td style="color:var(--text-muted);font-size:12px">${r.ders}</td><td style="color:var(--text-muted);font-size:12px">${r.tarih}</td><td style="color:var(--text-muted);font-size:12px">${r.saat}</td><td><span class="status-dot ${r.durum}">${rDurum[r.durum] || r.durum}</span></td></tr>`;
+      });
+    }
+  }).catch(() => {
+    // Fallback: demo veriler
+    const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️' };
+    const dTb = document.getElementById('derslerTableBody');
+    if (dTb) { dTb.innerHTML = ''; derslerDemoData.forEach(d => {
+      dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${d.icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot aktif">Aktif</span></td></tr>`;
+    });}
+    const pTb = document.getElementById('programTableBody');
+    if (pTb) { pTb.innerHTML = ''; programData.forEach(p => {
+      pTb.innerHTML += `<tr><td style="font-weight:600;font-size:13px">${p.gun}</td><td style="color:var(--text-muted);font-size:12px">${p.ders}</td><td style="color:var(--text-muted);font-size:12px">${p.saat}</td><td style="color:var(--text-muted);font-size:12px">${p.salon}</td><td><span class="status-dot aktif">Aktif</span></td></tr>`;
+    });}
+    const rTb = document.getElementById('rezervasyonTableBody');
+    const rDurum = { aktif:'Aktif', iptal:'İptal', tamamlandi:'Tamamlandı' };
+    const isUye = currentRole === 'uye';
+    const currentProfile = roleProfiles[currentRole];
+    const uyeSutunu = document.getElementById('rezervasyonUyeTh');
+    if (uyeSutunu) uyeSutunu.style.display = isUye ? 'none' : '';
+    let filteredRezervasyonlar = isUye ? rezervasyonData.filter(r => r.uye === currentProfile.name) : rezervasyonData;
+    if (rTb) { rTb.innerHTML = ''; filteredRezervasyonlar.forEach((r, idx) => {
+      const color = avatarColors[idx % avatarColors.length];
+      const uyeCell = isUye ? '' : `<td><div class="member-info"><div class="m-avatar" style="background:${color};width:30px;height:30px;font-size:11px;border-radius:8px">${getInitials(r.uye)}</div><div class="m-name">${r.uye}</div></div></td>`;
+      rTb.innerHTML += `<tr>${uyeCell}<td style="color:var(--text-muted);font-size:12px">${r.ders}</td><td style="color:var(--text-muted);font-size:12px">${r.tarih}</td><td style="color:var(--text-muted);font-size:12px">${r.saat}</td><td><span class="status-dot ${r.durum}">${rDurum[r.durum]}</span></td></tr>`;
+    });}
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -958,31 +1016,42 @@ function renderDerslerPage() {
 function renderAntrenorlerPage() {
   const container = document.getElementById('antrenorProfileCards');
   if (!container) return;
-  const trainers = [
-    { name:'Kemal Antrenör', email:'kemal@fitzone.com', uzmanlik:'Fonksiyonel Fitness, Crossfit', deneyim:8, sertifikalar:['ACE CPT','CSCS'], bio:'8 yıllık deneyimli antrenör. Fonksiyonel fitness ve crossfit alanında uzman. Yüksek yoğunluklu antrenman programları hazırlar.', dersler:['Kickboks','Fonksiyonel Fitness'], dersCount:2, ogrenciCount:40, durum:'aktif' },
-    { name:'Deniz Koç',      email:'deniz@fitzone.com', uzmanlik:'Yoga, Pilates, Aqua Aerobik',  deneyim:5, sertifikalar:['RYT-200','STOTT Pilates'], bio:'5 yıldır yoga ve pilates eğitmeni. Sakin ve odaklanmış bir antrenman ortamı sunar. Aqua aerobik konusunda da deneyimlidir.', dersler:['Yoga Flow','Aqua Aerobik','Pilates'], dersCount:3, ogrenciCount:42, durum:'aktif' },
-  ];
-  container.innerHTML = '';
-  trainers.forEach((t, idx) => {
-    const color = avatarColors[idx % avatarColors.length];
-    const certs = t.sertifikalar.map(c => `<span class="cert-badge"><i class="fas fa-certificate" style="font-size:9px"></i> ${c}</span>`).join('');
-    const dersler = t.dersler.map(d => `<span class="cert-badge" style="background:rgba(0,212,255,.1);color:var(--accent-cyan);border-color:rgba(0,212,255,.2)"><i class="fas fa-dumbbell" style="font-size:9px"></i> ${d}</span>`).join('');
-    container.innerHTML += `
-      <div class="trainer-profile-card">
-        <div class="trainer-header">
-          <div class="trainer-avatar" style="background:${color}">${getInitials(t.name)}</div>
-          <div><div class="trainer-name">${t.name}</div><div class="trainer-specialty">${t.uzmanlik}</div></div>
-          <div style="margin-left:auto;font-size:11px;background:rgba(74,222,128,.1);color:#4ade80;padding:4px 10px;border-radius:20px;font-weight:600;">Aktif</div>
-        </div>
-        <div class="trainer-stats">
-          <div class="trainer-stat"><div class="trainer-stat-value">${t.deneyim}</div><div class="trainer-stat-label">Yıl Deneyim</div></div>
-          <div class="trainer-stat"><div class="trainer-stat-value">${t.dersCount}</div><div class="trainer-stat-label">Aktif Ders</div></div>
-          <div class="trainer-stat"><div class="trainer-stat-value">${t.ogrenciCount}</div><div class="trainer-stat-label">Öğrenci</div></div>
-        </div>
-        <div style="margin-bottom:10px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Sertifikalar</div><div class="trainer-certs">${certs}</div></div>
-        <div><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Dersler</div><div class="trainer-certs">${dersler}</div></div>
-        <div class="trainer-bio">${t.bio}</div>
-      </div>`;
+  fetch(API_URL + '/api/antrenorler-detay').then(r => r.json()).then(trainers => {
+    container.innerHTML = '';
+    trainers.forEach((t, idx) => {
+      const color = avatarColors[idx % avatarColors.length];
+      const certList = t.sertifikalar ? t.sertifikalar.split(',').map(c => c.trim()) : [];
+      const certs = certList.map(c => `<span class="cert-badge"><i class="fas fa-certificate" style="font-size:9px"></i> ${c}</span>`).join('');
+      const durumColor = t.durum === 'aktif' ? { bg:'rgba(74,222,128,.1)', color:'#4ade80', text:'Aktif' } : { bg:'rgba(148,163,184,.1)', color:'#94a3b8', text:t.durum };
+      container.innerHTML += `
+        <div class="trainer-profile-card">
+          <div class="trainer-header">
+            <div class="trainer-avatar" style="background:${color}">${getInitials(t.isim)}</div>
+            <div><div class="trainer-name">${t.isim}</div><div class="trainer-specialty">${t.uzmanlik || ''}</div></div>
+            <div style="margin-left:auto;font-size:11px;background:${durumColor.bg};color:${durumColor.color};padding:4px 10px;border-radius:20px;font-weight:600;">${durumColor.text}</div>
+          </div>
+          <div class="trainer-stats">
+            <div class="trainer-stat"><div class="trainer-stat-value">${t.deneyim}</div><div class="trainer-stat-label">Yıl Deneyim</div></div>
+            <div class="trainer-stat"><div class="trainer-stat-value">${t.dersCount}</div><div class="trainer-stat-label">Aktif Ders</div></div>
+            <div class="trainer-stat"><div class="trainer-stat-value">—</div><div class="trainer-stat-label">Öğrenci</div></div>
+          </div>
+          <div style="margin-bottom:10px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Sertifikalar</div><div class="trainer-certs">${certs || '—'}</div></div>
+          <div class="trainer-bio">${t.biyografi || ''}</div>
+        </div>`;
+    });
+  }).catch(() => {
+    // Fallback: hardcoded demo veriler
+    const fallback = [
+      { isim:'Kemal Antrenör', uzmanlik:'Fonksiyonel Fitness, Crossfit', deneyim:8, sertifikalar:'ACE CPT, CSCS', biyografi:'8 yıllık deneyimli antrenör.', dersCount:2, durum:'aktif' },
+      { isim:'Deniz Koç',      uzmanlik:'Yoga, Pilates, Aqua Aerobik',  deneyim:5, sertifikalar:'RYT-200, STOTT Pilates', biyografi:'5 yıldır yoga ve pilates eğitmeni.', dersCount:3, durum:'aktif' },
+    ];
+    container.innerHTML = '';
+    fallback.forEach((t, idx) => {
+      const color = avatarColors[idx % avatarColors.length];
+      const certList = t.sertifikalar ? t.sertifikalar.split(',').map(c => c.trim()) : [];
+      const certs = certList.map(c => `<span class="cert-badge"><i class="fas fa-certificate" style="font-size:9px"></i> ${c}</span>`).join('');
+      container.innerHTML += `<div class="trainer-profile-card"><div class="trainer-header"><div class="trainer-avatar" style="background:${color}">${getInitials(t.isim)}</div><div><div class="trainer-name">${t.isim}</div><div class="trainer-specialty">${t.uzmanlik}</div></div><div style="margin-left:auto;font-size:11px;background:rgba(74,222,128,.1);color:#4ade80;padding:4px 10px;border-radius:20px;font-weight:600;">Aktif</div></div><div class="trainer-stats"><div class="trainer-stat"><div class="trainer-stat-value">${t.deneyim}</div><div class="trainer-stat-label">Yıl Deneyim</div></div><div class="trainer-stat"><div class="trainer-stat-value">${t.dersCount}</div><div class="trainer-stat-label">Aktif Ders</div></div></div><div style="margin-bottom:10px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Sertifikalar</div><div class="trainer-certs">${certs}</div></div><div class="trainer-bio">${t.biyografi}</div></div>`;
+    });
   });
 }
 
@@ -1017,14 +1086,16 @@ function renderGirisCikisTable(data) {
   });
 }
 
+let girisCikisCachedData = [];
 function renderGirisCikisPage() {
   fetch(API_URL + '/api/giris-cikis').then(r => r.json()).then(data => {
-    const mapped = data.map(l => ({ uye:l.uye, giris:l.giris, cikis:l.cikis, turu:l.turu, durum:l.durum }));
-    renderGirisCikisTable(mapped);
-  }).catch(() => renderGirisCikisTable(girisCikisData));
+    girisCikisCachedData = data.map(l => ({ uye:l.uye, giris:l.giris, cikis:l.cikis, turu:l.turu, durum:l.durum }));
+    renderGirisCikisTable(girisCikisCachedData);
+  }).catch(() => { girisCikisCachedData = girisCikisData; renderGirisCikisTable(girisCikisData); });
 }
 function filterGirisCikis(st) {
-  renderGirisCikisTable(st === 'hepsi' ? girisCikisData : girisCikisData.filter(l => l.durum === st));
+  const source = girisCikisCachedData.length > 0 ? girisCikisCachedData : girisCikisData;
+  renderGirisCikisTable(st === 'hepsi' ? source : source.filter(l => l.durum === st));
 }
 
 // ═══════════════════════════════════════════
@@ -1062,10 +1133,11 @@ function renderEkipmanTable(data) {
   });
 }
 
+let ekipmanCachedData = [];
 function renderEkipmanPage() {
   fetch(API_URL + '/api/ekipman').then(r => r.json()).then(data => {
-    const mapped = data.ekipman.map(e => ({ ad:e.ad, kategori:e.kategori, adet:e.adet, satinAlma:e.satinAlma, fiyat:e.fiyat, durum:e.durum }));
-    renderEkipmanTable(mapped);
+    ekipmanCachedData = data.ekipman.map(e => ({ ad:e.ad, kategori:e.kategori, adet:e.adet, satinAlma:e.satinAlma, fiyat:e.fiyat, durum:e.durum }));
+    renderEkipmanTable(ekipmanCachedData);
     const bTb = document.getElementById('bakimTableBody');
     if (!bTb) return;
     bTb.innerHTML = '';
@@ -1079,11 +1151,12 @@ function renderEkipmanPage() {
         <td style="color:var(--text-muted);font-size:12px">${b.sonraki}</td>
         <td><span style="font-size:11px;background:rgba(74,222,128,.1);color:#4ade80;padding:4px 10px;border-radius:20px;font-weight:600;">Tamamlandı</span></td></tr>`;
     });
-  }).catch(() => renderEkipmanTable(ekipmanData));
+  }).catch(() => { ekipmanCachedData = ekipmanData; renderEkipmanTable(ekipmanData); });
 }
 
 function filterEkipman(st) {
-  renderEkipmanTable(st === 'hepsi' ? ekipmanData : ekipmanData.filter(e => e.durum === st));
+  const source = ekipmanCachedData.length > 0 ? ekipmanCachedData : ekipmanData;
+  renderEkipmanTable(st === 'hepsi' ? source : source.filter(e => e.durum === st));
 }
 
 // ═══════════════════════════════════════════
