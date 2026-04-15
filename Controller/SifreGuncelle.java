@@ -7,12 +7,14 @@ import java.sql.*;
  * Tüm kullanıcı şifrelerini "admin123" yapar (SHA-256 hash olarak).
  * 
  * Çalıştır:
- *   javac -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller/SifreGuncelle.java Controller/DatabaseBaglanti.java
- *   java  -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller.SifreGuncelle
+ * javac -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller/SifreGuncelle.java
+ * Controller/DatabaseBaglanti.java
+ * java -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller.SifreGuncelle
  */
 public class SifreGuncelle {
 
-    // SHA-256("admin123") = 240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
+    // SHA-256("admin123") =
+    // 240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9
     private static final String YENI_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
 
     public static void main(String[] args) throws Exception {
@@ -29,15 +31,14 @@ public class SifreGuncelle {
         System.out.println("\nMevcut kullanıcılar:");
         while (rs.next()) {
             System.out.printf("  [%d] %s %s (%s)%n",
-                rs.getInt("kullanici_id"), rs.getString("ad"), rs.getString("soyad"), rs.getString("email"));
+                    rs.getInt("kullanici_id"), rs.getString("ad"), rs.getString("soyad"), rs.getString("email"));
         }
         rs.close();
         st.close();
 
         // Tüm kullanıcıların şifresini güncelle
         PreparedStatement ps = conn.prepareStatement(
-            "UPDATE kullanicilar SET sifre_hash = ?"
-        );
+                "UPDATE kullanicilar SET sifre_hash = ?");
         ps.setString(1, YENI_HASH);
         int updated = ps.executeUpdate();
         ps.close();

@@ -242,6 +242,9 @@ Gemini
                     <span style="font-size:12px;color:var(--text-muted);font-weight:500;" id="themeLabel">Aydınlık
                         Mod</span>
                 </div>
+                <button class="btn-ghost" style="width:100%; margin-bottom:12px; color:#f87171; border:1px solid rgba(239,68,68,0.2); justify-content:center; padding: 10px;" onclick="logout()">
+                    <i class="fas fa-right-from-bracket"></i> Çıkış Yap
+                </button>
                 <div class="admin-card">
                     <div class="admin-avatar" id="sidebarAvatar">AY</div>
                     <div>
@@ -1506,7 +1509,7 @@ Gemini
     <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">İşlem başarılı!</span></div>
 
     <script src="app.js"></script>
-    <script>document.addEventListener('DOMContentLoaded', () => { initApp(); });</script>
+    <script>document.addEventListener('DOMContentLoaded', async () => { await initApp(); });</script>
 </body>
 
 </html>

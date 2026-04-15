@@ -122,9 +122,79 @@ function deleteMember(id) {
 const API_URL = 'http://localhost:8080';
 let apiMembers = []; // SQL Server'dan gelen üye listesi
 
+// ═══════════════════════════════════════════
+// TOKEN YÖNETİMİ — Auth helpers
+// ═══════════════════════════════════════════
+function getToken()    { return localStorage.getItem('fitzone_token'); }
+function setToken(t)   { localStorage.setItem('fitzone_token', t); }
+function clearToken()  {
+  localStorage.removeItem('fitzone_token');
+  localStorage.removeItem('fitzone_user');
+}
+function getSavedUser() {
+  try { return JSON.parse(localStorage.getItem('fitzone_user')); } catch { return null; }
+}
+
+/**
+ * apiFetch — Authorization header'lı fetch wrapper
+ * 401/403 alınırsa otomatik çıkış yapılır.
+ */
+function apiFetch(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+    ...(options.headers || {})
+  };
+  return fetch(API_URL + path, { ...options, headers })
+    .then(res => {
+      if (res.status === 401 || res.status === 403) {
+        clearToken();
+        forcedLogout();
+        throw new Error('AUTH_ERROR');
+      }
+      return res.json();
+    });
+}
+
+/**
+ * checkSession — Sayfa yenilenince mevcut token'ı doğrula.
+ * Geçerliyse loginAs() ile paneli aç, değilse landing sayfası kalır.
+ */
+async function checkSession() {
+  const token = getToken();
+  if (!token) return false;
+  try {
+    const data = await fetch(API_URL + '/api/dogrula', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+    }).then(r => r.json());
+    if (data.basarili) {
+      const k = data.kullanici;
+      const saved = getSavedUser() || {};
+      const user = {
+        id:    k.id,
+        ad:    k.ad    || saved.ad    || '',
+        soyad: k.soyad || saved.soyad || '',
+        email: k.email || saved.email || '',
+        rol:   k.rol   || saved.rol   || 'uye',
+        name:  (k.ad||saved.ad||'') + ' ' + (k.soyad||saved.soyad||'')
+      };
+      loginAs(user.rol, user);
+      return true;
+    }
+  } catch(e) { /* network error */ }
+  clearToken();
+  return false;
+}
+
+/** forcedLogout — token hatası nedeniyle çıkış */
+function forcedLogout() {
+  showToast('⚠️ Oturum süresi doldu, lütfen tekrar giriş yapın!');
+  setTimeout(() => logout(), 1200);
+}
+
 function loadMembersFromAPI() {
-  return fetch(API_URL + '/api/uyeler')
-    .then(r => r.json())
+  return apiFetch('/api/uyeler')
     .then(data => {
       apiMembers = data.map(u => ({
         id: u.id, ad: u.ad, soyad: u.soyad,
@@ -138,7 +208,7 @@ function loadMembersFromAPI() {
       }));
       return apiMembers;
     })
-    .catch(() => { console.log('API bağlantısı yok, fallback kullanılıyor'); return []; });
+    .catch(e => { if(e.message!=='AUTH_ERROR') console.log('Üye API yok, fallback'); return []; });
 }
 
 function apiDeleteMember(id) {
@@ -156,17 +226,15 @@ function closeDeleteModal() {
 function submitDeleteMember() {
   const id = document.getElementById('deleteId').value;
   closeDeleteModal();
-  fetch(API_URL + '/api/uye-sil', {
+  apiFetch('/api/uye-sil', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: String(id) })
   })
-  .then(r => r.json())
   .then(data => {
     showToast(data.mesaj);
     if (data.basarili) refreshMemberViews();
   })
-  .catch(() => showToast('Sunucu bağlantısı hatası!'));
+  .catch(e => { if(e.message!=='AUTH_ERROR') showToast('Sunucu bağlantısı hatası!'); });
 }
 
 function apiEditMember(id) {
@@ -200,21 +268,15 @@ function submitEditMember() {
   }
 
   closeEditModal();
-  fetch(API_URL + '/api/uye-guncelle', {
+  apiFetch('/api/uye-guncelle', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: String(id), ad, soyad,
-      email, telefon: telefon || '',
-      durum: durum || 'aktif'
-    })
+    body: JSON.stringify({ id: String(id), ad, soyad, email, telefon: telefon || '', durum: durum || 'aktif' })
   })
-  .then(r => r.json())
   .then(data => {
     showToast(data.mesaj);
     if (data.basarili) refreshMemberViews();
   })
-  .catch(() => showToast('Sunucu bağlantısı hatası!'));
+  .catch(e => { if(e.message!=='AUTH_ERROR') showToast('Sunucu bağlantısı hatası!'); });
 }
 
 function refreshMemberViews() {
@@ -593,8 +655,7 @@ const roleProfiles = {
 // DASHBOARD İSTATİSTİKLERİ (API'den)
 // ═══════════════════════════════════════════
 function loadDashboardStats() {
-  fetch(API_URL + '/api/istatistikler')
-    .then(r => r.json())
+  apiFetch('/api/istatistikler')
     .then(data => {
       const el1 = document.getElementById('totalMembers');
       const el2 = document.getElementById('monthlyIncome');
@@ -616,14 +677,14 @@ function loadDashboardStats() {
       if (u3) u3.textContent = data.suresiDolan;
       if (u4) u4.textContent = data.buAyYeniKayit;
     })
-    .catch(() => console.log('İstatistik API bağlantısı yok'));
+    .catch(e => { if(e.message!=='AUTH_ERROR') console.log('İstatistik API yok'); });
 }
 
 // ═══════════════════════════════════════════
 // API'den render fonksiyonları
 // ═══════════════════════════════════════════
 function loadRecentPaymentsFromAPI() {
-  fetch(API_URL + '/api/odemeler').then(r => r.json()).then(data => {
+  apiFetch('/api/odemeler').then(data => {
     const container = document.getElementById('recentPayments');
     if (!container) return;
     const iconMap = { 'Platinum':{ icon:'fa-crown', color:'#a78bfa', bg:'rgba(139,92,246,.15)' }, 'Gold':{ icon:'fa-star', color:'#fbbf24', bg:'rgba(251,191,36,.15)' }, 'Silver':{ icon:'fa-medal', color:'#94a3b8', bg:'rgba(148,163,184,.15)' }, 'Basic':{ icon:'fa-shield', color:'#67e8f9', bg:'rgba(34,211,238,.1)' } };
@@ -634,11 +695,11 @@ function loadRecentPaymentsFromAPI() {
       if (isIade) { pi.icon = 'fa-rotate-left'; pi.color = '#f87171'; pi.bg = 'rgba(239,68,68,.15)'; }
       container.innerHTML += `<div class="payment-item"><div class="pay-icon" style="background:${pi.bg};color:${pi.color}"><i class="fas ${pi.icon}"></i></div><div><div class="pay-name">${p.uye}</div><div class="pay-date">${p.plan} — ${p.yontem} — ${p.tarih}</div></div><div class="pay-amount ${isIade?'neg':'pos'}">${isIade?'-':'+'}₺${Math.round(p.miktar)}</div></div>`;
     });
-  }).catch(() => renderRecentPayments());
+  }).catch(e => { if(e.message!=='AUTH_ERROR') renderRecentPayments(); });
 }
 
 function loadPlanCardsFromAPI() {
-  fetch(API_URL + '/api/planlar').then(r => r.json()).then(data => {
+  fetch(API_URL + '/api/planlar').then(r => r.json()).then(data => {  // planlar public
     const container = document.getElementById('planCards');
     if (!container) return;
     const iconMap = { 'Platinum':'💎', 'Gold':'⭐', 'Silver':'🥈', 'Basic':'🔰' };
@@ -654,7 +715,7 @@ function loadPlanCardsFromAPI() {
 }
 
 function loadClassCardsFromAPI() {
-  fetch(API_URL + '/api/dersler').then(r => r.json()).then(data => {
+  apiFetch('/api/dersler').then(data => {
     const container = document.getElementById('classCards');
     if (!container) return;
     const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️' };
@@ -667,11 +728,11 @@ function loadClassCardsFromAPI() {
       container.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:rgba(0,212,255,.1);color:var(--accent-cyan);font-size:17px;">${icon}</div><div><div class="plan-name">${d.ders}</div><div class="plan-members">${saat} — ${salon} — ${d.antrenor} — ${d.kontenjan} kişi</div></div></div><div style="font-size:11px;background:rgba(0,212,255,.1);color:var(--accent-cyan);padding:4px 10px;border-radius:20px;font-weight:600;">Aktif</div></div>`;
     });
     container.innerHTML += '</div>';
-  }).catch(() => renderClassCards());
+  }).catch(e => { if(e.message!=='AUTH_ERROR') renderClassCards(); });
 }
 
 function loadTrainerCardsFromAPI() {
-  fetch(API_URL + '/api/antrenorler-detay').then(r => r.json()).then(data => {
+  apiFetch('/api/antrenorler-detay').then(data => {
     const container = document.getElementById('trainerCards');
     if (!container) return;
     container.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;">';
@@ -680,11 +741,11 @@ function loadTrainerCardsFromAPI() {
       container.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="m-avatar" style="background:${color};width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:13px;font-weight:700;flex-shrink:0;">${getInitials(t.isim)}</div><div><div class="plan-name">${t.isim}</div><div class="plan-members">${t.uzmanlik}</div><div class="plan-members">${t.deneyim} yıl · ${t.dersCount} ders · ${t.sertifikalar}</div></div></div><div style="font-size:11px;background:rgba(74,222,128,.1);color:#4ade80;padding:4px 10px;border-radius:20px;font-weight:600;">Aktif</div></div>`;
     });
     container.innerHTML += '</div>';
-  }).catch(() => renderTrainerCards());
+  }).catch(e => { if(e.message!=='AUTH_ERROR') renderTrainerCards(); });
 }
 
 function loadAccessLogsFromAPI() {
-  fetch(API_URL + '/api/giris-cikis').then(r => r.json()).then(data => {
+  apiFetch('/api/giris-cikis').then(data => {
     const container = document.getElementById('accessLogs');
     if (!container) return;
     const turuLabel = { normal:'Normal', qr:'QR Kod', kart:'Kart' };
@@ -696,11 +757,11 @@ function loadAccessLogsFromAPI() {
       container.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${isInside?'rgba(74,222,128,.1)':'rgba(148,163,184,.1)'};color:${isInside?'#4ade80':'#94a3b8'};font-size:16px;"><i class="fas ${turuIcon[l.turu]||'fa-door-open'}"></i></div><div><div class="plan-name">${l.uye}</div><div class="plan-members">Giriş: ${l.giris} · Çıkış: ${l.cikis||'İçeride'} · ${turuLabel[l.turu]||l.turu}</div></div></div><div style="font-size:11px;background:${isInside?'rgba(74,222,128,.1)':'rgba(148,163,184,.1)'};color:${isInside?'#4ade80':'#94a3b8'};padding:4px 10px;border-radius:20px;font-weight:600;">${isInside?'İçeride':'Çıktı'}</div></div>`;
     });
     container.innerHTML += '</div>';
-  }).catch(() => renderAccessLogs());
+  }).catch(e => { if(e.message!=='AUTH_ERROR') renderAccessLogs(); });
 }
 
 function loadEquipmentCardsFromAPI() {
-  fetch(API_URL + '/api/ekipman').then(r => r.json()).then(data => {
+  apiFetch('/api/ekipman').then(data => {
     const container = document.getElementById('equipmentCards');
     if (!container) return;
     const durumStyle = { calisiyor:{ text:'Çalışıyor', color:'#4ade80', bg:'rgba(74,222,128,.1)' }, bakimda:{ text:'Bakımda', color:'#fbbf24', bg:'rgba(251,191,36,.1)' }, arizali:{ text:'Arızalı', color:'#f87171', bg:'rgba(239,68,68,.1)' } };
@@ -713,22 +774,20 @@ function loadEquipmentCardsFromAPI() {
       container.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${d.bg};color:${d.color};font-size:17px;">${icon}</div><div><div class="plan-name">${e.ad}</div><div class="plan-members">${e.kategori} · ${e.adet} adet${bakim ? ' · Son bakım: '+bakim.tarih : ''}</div></div></div><div style="font-size:11px;background:${d.bg};color:${d.color};padding:4px 10px;border-radius:20px;font-weight:600;">${d.text}</div></div>`;
     });
     container.innerHTML += '</div>';
-  }).catch(() => renderEquipmentCards());
+  }).catch(e => { if(e.message!=='AUTH_ERROR') renderEquipmentCards(); });
 }
 
 // ═══════════════════════════════════════════
 // INIT — SAYFA YÜKLENINCE
 // ═══════════════════════════════════════════
-function initApp() {
-  loadTheme();
-  // Dashboard istatistikleri API'den
+
+/** loadAppData — panel açıldıktan sonra veri yükler */
+function loadAppData() {
   loadDashboardStats();
-  // Üye listesi API'den
   loadMembersFromAPI().then(data => {
     if (data.length > 0) { renderMembers(data); }
     else { renderMembers(members); }
   });
-  // Dashboard kartları API'den
   loadRecentPaymentsFromAPI();
   loadPlanCardsFromAPI();
   loadClassCardsFromAPI();
@@ -736,6 +795,14 @@ function initApp() {
   loadAccessLogsFromAPI();
   loadEquipmentCardsFromAPI();
   initChart();
+}
+
+/** initApp — DOMContentLoaded'dan çağrılır; oturum kontrolü yapar */
+async function initApp() {
+  loadTheme();
+  // Sayfa yenilemede token kontrol et
+  await checkSession();
+  // checkSession başarılıysa loginAs → loadAppData zaten çalışacak
 }
 
 // ═══════════════════════════════════════════
@@ -1267,38 +1334,40 @@ function handleLogin() {
     return;
   }
 
-  // Önce API'ye sor (SQL Server)
-  fetch('http://localhost:8080/api/giris', {
+  // API'ye giriş isteği gönder
+  const loginBtn = document.querySelector('#loginModal .btn-primary');
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'Giriş yapılıyor...'; }
+
+  fetch(API_URL + '/api/giris', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, sifre })
   })
   .then(res => res.json())
   .then(data => {
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Giriş Yap'; }
     if (data.basarili) {
-      const k = data.kullanici;
-      const user = {
-        ad: k.ad, soyad: k.soyad, email: k.email,
-        rol: k.rol, name: k.ad + ' ' + k.soyad, sifre: sifre
-      };
-      // localStorage'a da ekle (offline tutarlılık için)
-      if (!registeredUsers.some(u => u.email.toLowerCase() === email)) {
-        registeredUsers.push(user);
-        saveRegisteredUsers();
+      // Token ve kullanıcı bilgisini kaydet
+      if (data.token) {
+        setToken(data.token);
+        localStorage.setItem('fitzone_user', JSON.stringify(data.kullanici));
       }
+      const k = data.kullanici;
+      const user = { id: k.id, ad: k.ad, soyad: k.soyad, email: k.email, rol: k.rol, name: k.ad + ' ' + k.soyad };
       closeLoginModal();
       loginAs(user.rol, user);
     } else {
-      showToast(data.mesaj || 'Giriş başarısız!');
+      // Rate limit özel mesajı
+      if (data.kod === 'RATE_LIMITED') {
+        showToast('🚫 ' + (data.mesaj || 'Çok fazla deneme! Lütfen bekleyin.'));
+      } else {
+        showToast(data.mesaj || 'Giriş başarısız!');
+      }
     }
   })
   .catch(() => {
-    // API erişilemezse localStorage'dan dene (fallback)
-    const user = registeredUsers.find(u => u.email.toLowerCase() === email);
-    if (!user) { showToast('Sunucu bağlantısı yok ve kullanıcı bulunamadı!'); return; }
-    if (user.sifre !== sifre) { showToast('Şifre yanlış!'); return; }
-    closeLoginModal();
-    loginAs(user.rol, user);
+    if (loginBtn) { loginBtn.disabled = false; loginBtn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Giriş Yap'; }
+    showToast('🔌 Sunucu bağlantısı kurulamadı! Lütfen tekrar deneyin.');
   });
 }
 
@@ -1326,60 +1395,28 @@ function handleRegister() {
   }
 
   // API üzerinden SQL Server'a kaydet
-  fetch('http://localhost:8080/api/kayit', {
+  const regBtn = document.querySelector('#registerModal .btn-primary');
+  if (regBtn) { regBtn.disabled = true; regBtn.textContent = 'Kaydediliyor...'; }
+
+  fetch(API_URL + '/api/kayit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ad, soyad, email, telefon, cinsiyet, dogum_tarihi: dogum, sifre, rol: 'uye' })
   })
   .then(res => res.json())
   .then(data => {
+    if (regBtn) { regBtn.disabled = false; regBtn.innerHTML = '<i class="fas fa-user-plus"></i> Kaydol'; }
     if (data.basarili) {
-      // localStorage'a da ekle (frontend tutarlılığı için)
-      registeredUsers.push({
-        ad, soyad, email, telefon, cinsiyet, dogum, sifre, rol: 'uye', name: ad + ' ' + soyad
-      });
-      saveRegisteredUsers();
-
-      // Üye listesine de ekle (Varsayılan plan ataması yok - kullanıcı seçecek)
-      const yeniId = members.length + 1;
-      members.push({
-        id: yeniId, name: ad + ' ' + soyad, email: email,
-        telefon: telefon, cinsiyet: cinsiyet,
-        uyelikNo: 'FZ-2026-' + String(yeniId).padStart(3, '0'),
-        plan: '-', start: '-',
-        end: '-', payment: '-', status: 'pasif', odemeYontemi: '-'
-      });
-      saveMembers();
-
       closeRegisterModal();
-      showToast('Kayıt başarılı! Giriş yapabilirsiniz.');
+      showToast('✅ Kayıt başarılı! Giriş yapabilirsiniz.');
       setTimeout(() => showLoginModal(), 600);
     } else {
       showToast(data.mesaj || 'Kayıt başarısız!');
     }
   })
   .catch(() => {
-    // API erişilemezse sadece localStorage'a kaydet (fallback)
-    if (registeredUsers.some(u => u.email.toLowerCase() === email)) {
-      showToast('Bu e-posta zaten kayıtlı!');
-      return;
-    }
-    registeredUsers.push({ ad, soyad, email, telefon, cinsiyet, dogum, sifre, rol: 'uye', name: ad + ' ' + soyad });
-    saveRegisteredUsers();
-
-    const yeniId = members.length + 1;
-    members.push({
-      id: yeniId, name: ad + ' ' + soyad, email: email,
-      telefon: telefon, cinsiyet: cinsiyet,
-      uyelikNo: 'FZ-2026-' + String(yeniId).padStart(3, '0'),
-      plan: '-', start: '-',
-      end: '-', payment: '-', status: 'pasif', odemeYontemi: '-'
-    });
-    saveMembers();
-
-    closeRegisterModal();
-    showToast('Kayıt başarılı (çevrimdışı mod). Giriş yapabilirsiniz.');
-    setTimeout(() => showLoginModal(), 600);
+    if (regBtn) { regBtn.disabled = false; regBtn.innerHTML = '<i class="fas fa-user-plus"></i> Kaydol'; }
+    showToast('🔌 Sunucu bağlantısı kurulamadı!');
   });
 }
 
@@ -1492,10 +1529,10 @@ function loginAs(role, user) {
   const dashLink = document.querySelector('[data-page="dashboard"]');
   if (dashLink) navigateTo('dashboard', dashLink);
 
-  initApp();
+  loadAppData();
   if (isUye)      { renderUyeWeeklyCalendar(); renderUyeAktiviteChart(); }
   if (isAntrenor) { renderAntrenorWeeklyCalendar(); renderAntrenorKatilimChart(); }
-  showToast(`${displayRole} olarak giriş yapıldı!`);
+  showToast(`${displayRole} olarak giriş yapıldı! 🎉`);
 }
 
 
@@ -1517,9 +1554,9 @@ function applySidebarRole(role) {
 }
 
 function logout() {
+  clearToken();  // JWT token'ı sil
   currentRole = null;
-  activeUser = null;
-  // Show landing, hide panel
+  activeUser  = null;
   document.getElementById('landing-page').style.display = '';
   document.getElementById('app-layout').style.display = 'none';
   window.scrollTo(0, 0);

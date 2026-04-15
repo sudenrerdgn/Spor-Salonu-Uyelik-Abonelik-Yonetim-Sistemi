@@ -15,9 +15,14 @@ public class DatabaseBaglanti {
     private static final String SIFRE = "admin1234"; // SQL Server şifresi
 
     // SQL Authentication (kullanıcı adı + şifre):
+    // Not: databaseName belirtilmezse master'a bağlanır; fitzone DB yoksa hata verir
     private static final String URL = "jdbc:sqlserver://" + SUNUCU + ":" + PORT
             + ";databaseName=" + VERITABANI
-            + ";encrypt=true;trustServerCertificate=true";
+            + ";encrypt=true;trustServerCertificate=true;loginTimeout=10";
+
+    // Test için master bağlantı URL
+    private static final String MASTER_URL = "jdbc:sqlserver://" + SUNUCU + ":" + PORT
+            + ";encrypt=true;trustServerCertificate=true;loginTimeout=10";
 
     private static Connection baglanti = null;
 
@@ -27,20 +32,37 @@ public class DatabaseBaglanti {
     public static Connection baglantiGetir() {
         try {
             if (baglanti == null || baglanti.isClosed()) {
-                // SQL Server JDBC Driver yükle
                 Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
-                baglanti = DriverManager.getConnection(URL, KULLANICI_ADI, SIFRE);
-                System.out.println("✅ SQL Server bağlantısı başarılı!");
+                try {
+                    // Önce hedef veritabanına bağlan
+                    baglanti = DriverManager.getConnection(URL, KULLANICI_ADI, SIFRE);
+                    System.out.println("✅ SQL Server bağlantısı başarılı! (" + VERITABANI + ")");
+                } catch (SQLException e1) {
+                    System.out.println("⚠️ '" + VERITABANI + "' veritabanına bağlanılamadı, master üzerinden deneniyor...");
+                    System.out.println("   → Hata: " + e1.getMessage());
+                    // master üzerinden bağlan ve fitzone DB'yi oluşturmayı dene
+                    Connection masterConn = DriverManager.getConnection(MASTER_URL, KULLANICI_ADI, SIFRE);
+                    System.out.println("✅ Master bağlantısı başarılı! Veritabanı oluşturuluyor...");
+                    try (java.sql.Statement st = masterConn.createStatement()) {
+                        // Veritabanı yoksa oluştur
+                        st.execute("IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'" + VERITABANI + "') CREATE DATABASE [" + VERITABANI + "]");
+                        System.out.println("✅ Veritabanı '" + VERITABANI + "' oluşturuldu (veya zaten vardı).");
+                    }
+                    masterConn.close();
+                    // Şimdi asıl veritabanına bağlan
+                    baglanti = DriverManager.getConnection(URL, KULLANICI_ADI, SIFRE);
+                    System.out.println("✅ SQL Server bağlantısı başarılı! (" + VERITABANI + ")");
+                }
             }
         } catch (ClassNotFoundException e) {
             System.out.println("❌ SQL Server JDBC Driver bulunamadı!");
-            System.out.println("   → mssql-jdbc JAR dosyasını projeye ekleyin.");
-            System.out.println("   → Maven: com.microsoft.sqlserver:mssql-jdbc");
             e.printStackTrace();
         } catch (SQLException e) {
             System.out.println("❌ SQL Server bağlantı hatası!");
-            System.out.println("   → URL: " + URL);
+            System.out.println("   → Sunucu: " + SUNUCU);
             System.out.println("   → Kullanıcı: " + KULLANICI_ADI);
+            System.out.println("   → Hata kodu: " + e.getErrorCode());
+            System.out.println("   → Hata mesajı: " + e.getMessage());
             e.printStackTrace();
         }
         return baglanti;

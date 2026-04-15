@@ -247,18 +247,19 @@ GO
 
 -- ── 2. KULLANICILAR ───────────────────────
 INSERT INTO kullanicilar (ad, soyad, email, sifre_hash, telefon, dogum_tarihi, cinsiyet, rol_id, durum) VALUES
-  (N'Admin',   N'Yönetici', N'admin@fitzone.com',  N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0500000000', '1985-01-01', N'Erkek', 1, N'aktif'),
-  (N'Ahmet',   N'Yılmaz',   N'ahmet@mail.com',     N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0532111111', '1990-05-12', N'Erkek', 2, N'aktif'),
-  (N'Fatma',   N'Kaya',     N'fatma@mail.com',     N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0533222222', '1995-08-20', N'Kadın', 2, N'aktif'),
-  (N'Can',     N'Öztürk',   N'can@mail.com',       N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0534333333', '1988-11-03', N'Erkek', 2, N'aktif'),
-  (N'Selin',   N'Arslan',   N'selin@mail.com',     N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0535444444', '1992-03-15', N'Kadın', 2, N'aktif'),
-  (N'Emre',    N'Demir',    N'emre@mail.com',      N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0536555555', '1997-07-22', N'Erkek', 2, N'aktif'),
-  (N'Zeynep',  N'Şahin',    N'zeynep@mail.com',    N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0537666666', '1993-12-08', N'Kadın', 2, N'pasif'),
-  (N'Murat',   N'Çelik',    N'murat@mail.com',     N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0538777777', '1986-09-30', N'Erkek', 2, N'aktif'),
-  (N'Ayşe',    N'Yıldız',   N'ayse@mail.com',      N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0539888888', '1994-04-17', N'Kadın', 2, N'aktif'),
-  (N'Kemal',   N'Antrenör', N'kemal@fitzone.com',  N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0541999999', '1984-06-25', N'Erkek', 3, N'aktif'),
-  (N'Deniz',   N'Koç',      N'deniz@fitzone.com',  N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0542000000', '1989-02-14', N'Kadın', 3, N'aktif'),
-  (N'Elif',    N'Aydın',    N'elif@fitzone.com',   N'$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhN8/LewdBaeVpL7I6K.fy', N'0543111111', '1996-10-05', N'Kadın', 4, N'aktif');
+  (N'Admin',   N'Yönetici', N'admin@fitzone.com',  N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0500000000', '1985-01-01', N'Erkek', 1, N'aktif'),
+  (N'Ahmet',   N'Yılmaz',   N'ahmet@mail.com',     N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0532111111', '1990-05-12', N'Erkek', 2, N'aktif'),
+  (N'Fatma',   N'Kaya',     N'fatma@mail.com',     N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0533222222', '1995-08-20', N'Kadın', 2, N'aktif'),
+  (N'Can',     N'Öztürk',   N'can@mail.com',       N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0534333333', '1988-11-03', N'Erkek', 2, N'aktif'),
+  (N'Selin',   N'Arslan',   N'selin@mail.com',     N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0535444444', '1992-03-15', N'Kadın', 2, N'aktif'),
+  (N'Emre',    N'Demir',    N'emre@mail.com',      N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0536555555', '1997-07-22', N'Erkek', 2, N'aktif'),
+  (N'Zeynep',  N'Şahin',    N'zeynep@mail.com',    N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0537666666', '1993-12-08', N'Kadın', 2, N'pasif'),
+  (N'Murat',   N'Çelik',    N'murat@mail.com',     N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0538777777', '1986-09-30', N'Erkek', 2, N'aktif'),
+  (N'Ayşe',    N'Yıldız',   N'ayse@mail.com',      N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0539888888', '1994-04-17', N'Kadın', 2, N'aktif'),
+  (N'Kemal',   N'Antrenör', N'kemal@fitzone.com',  N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0541999999', '1984-06-25', N'Erkek', 3, N'aktif'),
+  (N'Deniz',   N'Koç',      N'deniz@fitzone.com',  N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0542000000', '1989-02-14', N'Kadın', 3, N'aktif'),
+  (N'Elif',    N'Aydın',    N'elif@fitzone.com',   N'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a', N'0543111111', '1996-10-05', N'Kadın', 4, N'aktif');
+
 GO
 
 -- ── 3. UYELER ─────────────────────────────
