@@ -148,9 +148,12 @@ function apiFetch(path, options = {}) {
   };
   return fetch(API_URL + path, { ...options, headers })
     .then(res => {
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
         clearToken();
         forcedLogout();
+        throw new Error('AUTH_ERROR');
+      }
+      if (res.status === 403) {
         throw new Error('AUTH_ERROR');
       }
       return res.json();
@@ -177,6 +180,7 @@ async function checkSession() {
         soyad: k.soyad || saved.soyad || '',
         email: k.email || saved.email || '',
         rol:   k.rol   || saved.rol   || 'uye',
+        telefon: k.telefon || saved.telefon || '',
         name:  (k.ad||saved.ad||'') + ' ' + (k.soyad||saved.soyad||'')
       };
       loginAs(user.rol, user);
@@ -1290,24 +1294,71 @@ function renderRaporlarPage() {
 // AYARLAR SAYFASI
 // ═══════════════════════════════════════════
 function renderAyarlarPage() {
+  const user = getSavedUser() || {};
+  const profilAd = document.getElementById('profilAd');
+  if (profilAd) {
+    profilAd.value = user.ad || '';
+    document.getElementById('profilSoyad').value = user.soyad || '';
+    document.getElementById('profilEmail').value = user.email || '';
+    document.getElementById('profilTelefon').value = user.telefon || '';
+  }
+
   const tbody = document.getElementById('ayarlarKullaniciTable');
   if (!tbody) return;
-  const users = [
-    { name:'Admin Yönetici', rol:'Süper Admin',    email:'admin@fitzone.com', durum:'aktif' },
-    { name:'Kemal Antrenör', rol:'Antrenör',       email:'kemal@fitzone.com', durum:'aktif' },
-    { name:'Deniz Koç',      rol:'Antrenör',       email:'deniz@fitzone.com', durum:'aktif' },
-    { name:'Elif Aydın',     rol:'Resepsiyonist',  email:'elif@fitzone.com',  durum:'aktif' },
-  ];
-  const rolColors = { 'Süper Admin':'#a78bfa', 'Antrenör':'#00d4ff', 'Resepsiyonist':'#fbbf24' };
-  tbody.innerHTML = '';
-  users.forEach((u, idx) => {
-    const color = avatarColors[idx % avatarColors.length];
-    const rc = rolColors[u.rol] || '#94a3b8';
-    tbody.innerHTML += `<tr>
-      <td><div class="member-info"><div class="m-avatar" style="background:${color}">${getInitials(u.name)}</div><div class="m-name">${u.name}</div></div></td>
-      <td><span style="font-size:11px;background:${rc}20;color:${rc};padding:4px 10px;border-radius:20px;font-weight:600;">${u.rol}</span></td>
-      <td style="color:var(--text-muted);font-size:12px">${u.email}</td>
-      <td><span class="status-dot aktif">Aktif</span></td></tr>`;
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-muted);">Yükleniyor...</td></tr>';
+  
+  if (user.rol === 'admin') {
+      apiFetch('/api/kullanicilar')
+        .then(users => {
+          const rolColors = { 'admin':'#a78bfa', 'antrenor':'#00d4ff', 'uye':'#fbbf24', 'Süper Admin':'#a78bfa' };
+          const rolLabels = { 'admin':'Süper Admin', 'uye':'Üye', 'antrenor':'Antrenör' };
+          tbody.innerHTML = '';
+          users.forEach((u, idx) => {
+            const color = avatarColors[idx % avatarColors.length];
+            const rc = rolColors[u.rol] || '#94a3b8';
+            const rLabel = rolLabels[u.rol] || u.rol;
+            const uName = u.ad + ' ' + u.soyad;
+            tbody.innerHTML += `<tr>
+              <td><div class="member-info"><div class="m-avatar" style="background:${color}">${getInitials(uName)}</div><div class="m-name">${uName}</div></div></td>
+              <td><span style="font-size:11px;background:${rc}20;color:${rc};padding:4px 10px;border-radius:20px;font-weight:600;">${rLabel}</span></td>
+              <td style="color:var(--text-muted);font-size:12px">${u.email}</td>
+              <td><span class="status-dot ${u.durum === 'aktif' ? 'aktif' : 'pasif'}">${u.durum === 'aktif' ? 'Aktif' : 'Pasif'}</span></td></tr>`;
+          });
+        })
+        .catch(e => {
+            if(e.message!=='AUTH_ERROR') tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Kullanıcılar yüklenemedi.</td></tr>';
+        });
+  }
+}
+
+function submitProfilGuncelle() {
+  const ad = document.getElementById('profilAd').value.trim();
+  const soyad = document.getElementById('profilSoyad').value.trim();
+  const telefon = document.getElementById('profilTelefon').value.trim();
+
+  if (!ad || !soyad) {
+    showToast('Ad ve soyad zorunludur!');
+    return;
+  }
+
+  apiFetch('/api/profil-guncelle', {
+    method: 'POST',
+    body: JSON.stringify({ ad, soyad, telefon })
+  })
+  .then(data => {
+    showToast(data.mesaj);
+    if (data.basarili) {
+      const saved = getSavedUser() || {};
+      saved.ad = ad;
+      saved.soyad = soyad;
+      saved.telefon = telefon;
+      saved.name = ad + ' ' + soyad;
+      localStorage.setItem('fitzone_user', JSON.stringify(saved));
+      loginAs(saved.rol, saved);
+    }
+  })
+  .catch(e => {
+    if(e.message!=='AUTH_ERROR') showToast('Sunucu bağlantısı hatası!');
   });
 }
 
@@ -1353,7 +1404,7 @@ function handleLogin() {
         localStorage.setItem('fitzone_user', JSON.stringify(data.kullanici));
       }
       const k = data.kullanici;
-      const user = { id: k.id, ad: k.ad, soyad: k.soyad, email: k.email, rol: k.rol, name: k.ad + ' ' + k.soyad };
+      const user = { id: k.id, ad: k.ad, soyad: k.soyad, email: k.email, rol: k.rol, telefon: k.telefon || '', name: k.ad + ' ' + k.soyad };
       closeLoginModal();
       loginAs(user.rol, user);
     } else {
@@ -1550,6 +1601,11 @@ function applySidebarRole(role) {
   // Section labels without data-role: show for admin only
   document.querySelectorAll('.nav-section-label:not([data-role])').forEach(el => {
     el.style.display = role === 'admin' ? '' : 'none';
+  });
+  // Role-specific display for cards
+  document.querySelectorAll('.glass-card[data-role]').forEach(el => {
+    const roles = el.getAttribute('data-role').split(' ');
+    el.style.display = roles.includes(role) ? '' : 'none';
   });
 }
 

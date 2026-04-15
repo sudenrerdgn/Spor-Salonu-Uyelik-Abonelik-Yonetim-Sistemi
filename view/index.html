@@ -225,11 +225,11 @@ Gemini
                 <i class="fas fa-wrench"></i> Ekipman
             </a>
 
-            <div class="nav-section-label" data-role="admin">Yönetim</div>
+            <div class="nav-section-label" data-role="admin uye antrenor">Yönetim</div>
             <a class="nav-item" href="#" data-page="raporlar" data-role="admin" onclick="navigateTo('raporlar',this)">
                 <i class="fas fa-chart-line"></i> Raporlar
             </a>
-            <a class="nav-item" href="#" data-page="ayarlar" data-role="admin" onclick="navigateTo('ayarlar',this)">
+            <a class="nav-item" href="#" data-page="ayarlar" data-role="admin uye antrenor" onclick="navigateTo('ayarlar',this)">
                 <i class="fas fa-gear"></i> Ayarlar
             </a>
 
@@ -242,9 +242,7 @@ Gemini
                     <span style="font-size:12px;color:var(--text-muted);font-weight:500;" id="themeLabel">Aydınlık
                         Mod</span>
                 </div>
-                <button class="btn-ghost" style="width:100%; margin-bottom:12px; color:#f87171; border:1px solid rgba(239,68,68,0.2); justify-content:center; padding: 10px;" onclick="logout()">
-                    <i class="fas fa-right-from-bracket"></i> Çıkış Yap
-                </button>
+
                 <div class="admin-card">
                     <div class="admin-avatar" id="sidebarAvatar">AY</div>
                     <div>
@@ -1189,7 +1187,22 @@ Gemini
                     </div>
                 </div>
                 <div class="content-grid" style="grid-template-columns:1fr 1fr;">
-                    <div class="glass-card">
+                    
+                    <!-- NEW PROFIL AYARLARI -->
+                    <div class="glass-card" data-role="admin uye antrenor">
+                        <div class="card-header">
+                            <div class="card-title">Profil Ayarları</div>
+                        </div>
+                        <div class="settings-form">
+                            <div class="form-field"><label>Ad</label><input type="text" id="profilAd" placeholder="Adınız"></div>
+                            <div class="form-field"><label>Soyad</label><input type="text" id="profilSoyad" placeholder="Soyadınız"></div>
+                            <div class="form-field"><label>E-posta</label><input type="email" id="profilEmail" disabled style="opacity:0.6; cursor:not-allowed;"></div>
+                            <div class="form-field"><label>Telefon</label><input type="text" id="profilTelefon" placeholder="Telefonunuz"></div>
+                            <button class="btn-primary" style="margin-top:16px;" onclick="submitProfilGuncelle()"><i class="fas fa-save"></i> Profili Güncelle</button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card" data-role="admin">
                         <div class="card-header">
                             <div class="card-title">Salon Bilgileri</div>
                         </div>
@@ -1209,7 +1222,7 @@ Gemini
                                 onclick="showToast('Ayarlar kaydedildi ✓')"><i class="fas fa-save"></i> Kaydet</button>
                         </div>
                     </div>
-                    <div class="glass-card">
+                    <div class="glass-card" data-role="admin">
                         <div class="card-header">
                             <div class="card-title">Sistem Kullanıcıları</div>
                         </div>
@@ -1228,7 +1241,7 @@ Gemini
                         </div>
                     </div>
                 </div>
-                <div class="glass-card" style="margin-top:20px;">
+                <div class="glass-card" style="margin-top:20px;" data-role="admin">
                     <div class="card-header">
                         <div class="card-title">Bildirim Ayarları</div>
                     </div>

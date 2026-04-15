@@ -76,6 +76,7 @@ public class ApiServer {
 
         // ── Admin ────────────────────────────────────────────
         server.createContext("/api/uyeler",            new UyelerHandler());
+        server.createContext("/api/kullanicilar",      new KullanicilarHandler());
         server.createContext("/api/uye-guncelle",      new UyeGuncelleHandler());
         server.createContext("/api/uye-sil",           new UyeSilHandler());
         server.createContext("/api/istatistikler",     new IstatistiklerHandler());
@@ -83,6 +84,7 @@ public class ApiServer {
         // ── Admin | Üye (kendi verisi) ────────────────────────
         server.createContext("/api/odemeler",          new OdemelerHandler());
         server.createContext("/api/abonelikler",       new AboneliklerHandler());
+        server.createContext("/api/profil-guncelle",   new ProfilGuncelleHandler());
 
         // ── Tüm giriş yapmış kullanıcılar ────────────────────
         server.createContext("/api/dersler",           new DerslerHandler());
@@ -386,7 +388,7 @@ public class ApiServer {
             try {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT k.kullanici_id,k.ad,k.soyad,k.email,k.sifre_hash,k.durum,r.rol_adi " +
+                    "SELECT k.kullanici_id,k.ad,k.soyad,k.email,k.telefon,k.sifre_hash,k.durum,r.rol_adi " +
                     "FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE k.email=?");
                 stmt.setString(1,email.toLowerCase());
                 ResultSet rs = stmt.executeQuery();
@@ -401,6 +403,7 @@ public class ApiServer {
                 String ad          = rs.getString("ad");
                 String soyad       = rs.getString("soyad");
                 String dbEmail     = rs.getString("email");
+                String telefon     = rs.getString("telefon");
                 String kayitliHash = rs.getString("sifre_hash");
                 String durum       = rs.getString("durum");
                 String rolAdi      = rs.getString("rol_adi");
@@ -428,8 +431,8 @@ public class ApiServer {
 
                 String json = String.format(
                     "{\"basarili\":true,\"mesaj\":\"Giriş başarılı!\",\"token\":\"%s\"," +
-                    "\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\"}}",
-                    token, id, ad, soyad, dbEmail, rolAdi);
+                    "\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
+                    token, id, ad, soyad, dbEmail, rolAdi, telefon!=null?telefon:"");
 
                 System.out.println("✅ Giriş: "+ad+" "+soyad+" ("+rolAdi+")");
                 sendResponse(ex,200,json);
@@ -460,7 +463,7 @@ public class ApiServer {
                 int kullaniciId = Integer.parseInt(u[0]);
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT ad,soyad,email FROM kullanicilar WHERE kullanici_id=? AND durum=N'aktif'");
+                    "SELECT ad,soyad,email,telefon FROM kullanicilar WHERE kullanici_id=? AND durum=N'aktif'");
                 stmt.setInt(1,kullaniciId);
                 ResultSet rs = stmt.executeQuery();
 
@@ -473,11 +476,12 @@ public class ApiServer {
                 String ad    = rs.getString("ad");
                 String soyad = rs.getString("soyad");
                 String email = rs.getString("email");
+                String telefon= rs.getString("telefon");
                 rs.close(); stmt.close();
 
                 String json = String.format(
-                    "{\"basarili\":true,\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\"}}",
-                    kullaniciId, ad, soyad, email, u[2]);
+                    "{\"basarili\":true,\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
+                    kullaniciId, ad, soyad, email, u[2], telefon!=null?telefon:"");
                 sendResponse(ex,200,json);
 
             } catch (Exception e) {
@@ -551,6 +555,42 @@ public class ApiServer {
     }
 
     // ═══════════════════════════════════════════════════
+    // KULLANICILAR — GET /api/kullanicilar  [Admin]
+    // ═══════════════════════════════════════════════════
+    static class KullanicilarHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+                ResultSet rs    = stmt.executeQuery(
+                    "SELECT k.kullanici_id, k.ad, k.soyad, k.email, r.rol_adi, k.durum " +
+                    "FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id " +
+                    "ORDER BY k.kullanici_id");
+
+                StringBuilder json = new StringBuilder("[");
+                boolean first=true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append(String.format(
+                        "{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"durum\":\"%s\"}",
+                        rs.getInt("kullanici_id"), rs.getString("ad").replace("\"", "\\\""), rs.getString("soyad").replace("\"", "\\\""),
+                        rs.getString("email").replace("\"", "\\\""), rs.getString("rol_adi"), rs.getString("durum")));
+                    first=false;
+                }
+                json.append("]");
+                rs.close(); stmt.close();
+                sendResponse(ex,200,json.toString());
+            } catch (SQLException e) {
+                sendResponse(ex,500,"{\"hata\":\""+e.getMessage().replace("\"","'")+"\"}");
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
     // ÜYE GÜNCELLE — POST /api/uye-guncelle  [Admin]
     // ═══════════════════════════════════════════════════
     static class UyeGuncelleHandler implements HttpHandler {
@@ -587,6 +627,45 @@ public class ApiServer {
                 else     { sendResponse(ex,404,errJson("Üye bulunamadı!","NOT_FOUND")); }
             } catch (SQLException e) {
                 System.out.println("❌ Güncelleme hatası: "+e.getMessage());
+                sendResponse(ex,500,errJson("Veritabanı hatası","DB_ERROR"));
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // PROFİL GÜNCELLE — POST /api/profil-guncelle  [Giriş Yapmış Herkes]
+    // ═══════════════════════════════════════════════════
+    static class ProfilGuncelleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAuth(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+            
+            String[] u = authUser(ex);
+            int kId = Integer.parseInt(u[0]);
+            
+            String body   = readBody(ex);
+            String ad     = jsonValue(body,"ad");
+            String soyad  = jsonValue(body,"soyad");
+            String telefon= jsonValue(body,"telefon");
+
+            if (ad==null||soyad==null) {
+                sendResponse(ex,400,errJson("Eksik alanlar!","BAD_REQUEST")); return;
+            }
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement stmt = conn.prepareStatement(
+                    "UPDATE kullanicilar SET ad=?,soyad=?,telefon=? WHERE kullanici_id=?");
+                stmt.setString(1,ad); stmt.setString(2,soyad);
+                stmt.setString(3,telefon!=null?telefon:"");
+                stmt.setInt(4,kId);
+                int n=stmt.executeUpdate(); stmt.close();
+
+                if (n>0) { System.out.println("✅ Profil güncellendi: ID="+kId); sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Profil güncellendi!\"}"); }
+                else     { sendResponse(ex,404,errJson("Kullanıcı bulunamadı!","NOT_FOUND")); }
+            } catch (SQLException e) {
                 sendResponse(ex,500,errJson("Veritabanı hatası","DB_ERROR"));
             }
         }
