@@ -804,6 +804,14 @@ function loadAppData() {
 /** initApp — DOMContentLoaded'dan çağrılır; oturum kontrolü yapar */
 async function initApp() {
   loadTheme();
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('resetToken')) {
+      const token = urlParams.get('resetToken');
+      document.getElementById('resetTokenInput').value = token;
+      setTimeout(() => showResetModal(), 500);
+  }
+  
   // Sayfa yenilemede token kontrol et
   await checkSession();
   // checkSession başarılıysa loginAs → loadAppData zaten çalışacak
@@ -1374,6 +1382,8 @@ function showRegisterModal() { document.getElementById('registerModal').classLis
 function closeRegisterModal(){ document.getElementById('registerModal').classList.remove('open'); }
 function showForgotModal()   { document.getElementById('forgotModal').classList.add('open'); }
 function closeForgotModal()  { document.getElementById('forgotModal').classList.remove('open'); }
+function showResetModal()    { document.getElementById('resetPasswordModal').classList.add('open'); }
+function closeResetModal()   { document.getElementById('resetPasswordModal').classList.remove('open'); }
 
 // --- Login handler — email + şifre ile giriş (API destekli) ---
 function handleLogin() {
@@ -1472,9 +1482,53 @@ function handleRegister() {
 }
 
 function handleForgot() {
-  closeForgotModal();
-  showToast('Şifre sıfırlama linki gönderildi!');
-  setTimeout(() => showLoginModal(), 600);
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+  if (!email) { showToast('E-posta girmelisiniz!'); return; }
+  
+  fetch(API_URL + '/api/sifremi-unuttum', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  })
+  .then(res => res.json())
+  .then(data => {
+    closeForgotModal();
+    if(data.token) {
+      console.log('-----------------------------');
+      console.log('SİMÜLEYE EDİLEN E-POSTA (' + email + ')');
+      console.log('Şifre sıfırlama linkiniz: http://localhost:8080/?resetToken=' + data.token);
+      console.log('-----------------------------');
+    }
+    showToast(data.mesaj);
+  })
+  .catch(() => { showToast('Bağlantı hatası!'); });
+}
+
+function handleReset() {
+  const token = document.getElementById('resetTokenInput').value;
+  const yeni_sifre = document.getElementById('resetPassword').value;
+  const sifre2 = document.getElementById('resetPassword2').value;
+  
+  if (!yeni_sifre || yeni_sifre !== sifre2) { showToast('Şifreler eşleşmiyor veya boş!'); return; }
+  if (yeni_sifre.length < 6) { showToast('Şifre en az 6 karakter olmalı!'); return; }
+  
+  fetch(API_URL + '/api/sifre-sifirla', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, yeni_sifre })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.basarili) {
+      closeResetModal();
+      showToast('Şifreniz güncellendi, giriş yapabilirsiniz.');
+      setTimeout(() => showLoginModal(), 600);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      showToast(data.mesaj);
+    }
+  })
+  .catch(() => { showToast('Bağlantı hatası!'); });
 }
 
 // --- Kayıtlı kullanıcılar (localStorage destekli) ---

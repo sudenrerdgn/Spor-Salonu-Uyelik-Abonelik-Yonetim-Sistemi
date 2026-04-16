@@ -1518,10 +1518,27 @@ Gemini
         </div>
     </div>
 
+    <!-- ─── RESET PASSWORD MODAL ─── -->
+    <div class="modal-overlay" id="resetPasswordModal" onclick="if(event.target===this)closeResetModal()">
+        <div class="modal" style="width:420px;">
+            <h2><i class="fas fa-lock" style="color:var(--accent-cyan);margin-right:8px;"></i>Yeni Şifre Belirle</h2>
+            <p>Lütfen yeni şifrenizi girin.</p>
+            <input type="hidden" id="resetTokenInput">
+            <div class="form-field" style="margin-bottom:14px;"><label>Yeni Şifre</label><input type="password"
+                    id="resetPassword" placeholder="En az 6 karakter"></div>
+            <div class="form-field" style="margin-bottom:20px;"><label>Yeni Şifre Tekrar</label><input type="password"
+                    id="resetPassword2" placeholder="Şifreyi tekrar girin"></div>
+            <div class="modal-actions" style="flex-direction:column;gap:10px;">
+                <button class="btn-primary" style="width:100%;justify-content:center;" onclick="handleReset()"><i
+                        class="fas fa-save"></i> Şifreyi Kaydet</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">İşlem başarılı!</span></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
     <script>document.addEventListener('DOMContentLoaded', async () => { await initApp(); });</script>
 </body>
 

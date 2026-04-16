@@ -10,8 +10,16 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.security.MessageDigest;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.PasswordAuthentication;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -68,6 +76,8 @@ public class ApiServer {
         // ── Public endpointler (token gerekmez) ──────────────
         server.createContext("/api/kayit",             new KayitHandler());
         server.createContext("/api/giris",             new GirisHandler());
+        server.createContext("/api/sifremi-unuttum",   new SifremiUnuttumHandler());
+        server.createContext("/api/sifre-sifirla",     new SifreSifirlaHandler());
         server.createContext("/api/planlar",           new PlanlarHandler());   // landing sayfası için public
         server.createContext("/api/test",              new TestHandler());
 
@@ -1192,6 +1202,145 @@ public class ApiServer {
             ex.sendResponseHeaders(200, bytes.length);
             OutputStream os = ex.getResponseBody();
             os.write(bytes); os.close();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ŞİFREMİ UNUTTUM — POST /api/sifremi-unuttum
+    // ═══════════════════════════════════════════════════
+    static class SifremiUnuttumHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+            
+            String body  = readBody(ex);
+            String email = jsonValue(body,"email");
+            if (email==null) { sendResponse(ex,400,errJson("E-posta gerekli!","BAD_REQUEST")); return; }
+            
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement stmt = conn.prepareStatement("SELECT kullanici_id FROM kullanicilar WHERE email=?");
+                stmt.setString(1, email.toLowerCase());
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    int kId = rs.getInt("kullanici_id");
+                    String resetToken = UUID.randomUUID().toString();
+                    PreparedStatement upd = conn.prepareStatement("UPDATE kullanicilar SET sifre_token=?, token_gecerli=DATEADD(hour, 1, GETDATE()) WHERE kullanici_id=?");
+                    upd.setString(1, resetToken);
+                    upd.setInt(2, kId);
+                    upd.executeUpdate();
+                    upd.close();
+                    
+                    System.out.println("📧 E-Posta gönderimi başlatılıyor: " + email);
+                    // Gerçekten Mail Gönder (Thread içinde atıyoruz ki API'yi bekletmesin)
+                    new Thread(() -> {
+                        MailSender.sendResetMail(email, resetToken);
+                    }).start();
+                    
+                    sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Şifre sıfırlama linki e-postanıza gönderildi.\",\"token\":\"\"}");
+                } else {
+                    sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Eğer bu e-posta sistemimize kayıtlıysa sıfırlama linki gönderilmiştir.\"}");
+                }
+                rs.close(); stmt.close();
+            } catch (SQLException e) {
+                sendResponse(ex,500,errJson("Veritabanı hatası!","DB_ERROR"));
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ŞİFRE SIFIRLA — POST /api/sifre-sifirla
+    // ═══════════════════════════════════════════════════
+    static class SifreSifirlaHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+            
+            String body  = readBody(ex);
+            String token = jsonValue(body,"token");
+            String yeniSifre = jsonValue(body,"yeni_sifre");
+            
+            if (token==null||yeniSifre==null) { sendResponse(ex,400,errJson("Token ve yeni şifre gerekli!","BAD_REQUEST")); return; }
+            if (yeniSifre.length() < 6) { sendResponse(ex,400,errJson("Şifre en az 6 karakter olmalıdır!","BAD_REQUEST")); return; }
+            
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement stmt = conn.prepareStatement("SELECT kullanici_id FROM kullanicilar WHERE sifre_token=? AND token_gecerli > GETDATE()");
+                stmt.setString(1, token);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    int kId = rs.getInt("kullanici_id");
+                    String sifreHash = hashPassword(yeniSifre);
+                    PreparedStatement upd = conn.prepareStatement("UPDATE kullanicilar SET sifre_hash=?, sifre_token=NULL, token_gecerli=NULL WHERE kullanici_id=?");
+                    upd.setString(1, sifreHash);
+                    upd.setInt(2, kId);
+                    upd.executeUpdate();
+                    upd.close();
+                    
+                    System.out.println("✅ Şifre sıfırlandı: ID=" + kId);
+                    sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Şifreniz başarıyla sıfırlandı!\"}");
+                } else {
+                    sendResponse(ex,400,errJson("Geçersiz veya süresi dolmuş token!","INVALID_TOKEN"));
+                }
+                rs.close(); stmt.close();
+            } catch (SQLException e) {
+                sendResponse(ex,500,errJson("Veritabanı hatası!","DB_ERROR"));
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // MAİL GÖNDERİM YARDIMCISI (Javax.Mail / SMTP)
+    // ═══════════════════════════════════════════════════
+    static class MailSender {
+        // LÜTFEN KENDİ GMAIL ADRESİNİZİ VE "UYGULAMA ŞİFRENİZİ" (App Password) BURAYA YAZIN
+        static final String username = "fitzonedestek@gmail.com"; 
+        static final String password = "srtrfiadbvtqldlk";
+
+        public static void sendResetMail(String toEmail, String token) {
+            Properties prop = new Properties();
+            prop.put("mail.smtp.host", "smtp.gmail.com");
+            prop.put("mail.smtp.port", "587");
+            prop.put("mail.smtp.auth", "true");
+            prop.put("mail.smtp.starttls.enable", "true"); // TLS
+
+            Session session = Session.getInstance(prop,
+                new javax.mail.Authenticator() {
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(username, password);
+                    }
+                });
+
+            try {
+                Message message = new MimeMessage(session);
+                message.setFrom(new InternetAddress(username, "FitZone Pro"));
+                message.setRecipients(
+                    Message.RecipientType.TO,
+                    InternetAddress.parse(toEmail)
+                );
+                message.setSubject("FitZone Pro - Şifre Sıfırlama İsteği");
+
+                String resetLink = "http://localhost:8080/?resetToken=" + token;
+                
+                String htmlContent = "<div style='font-family:sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;border-radius:10px;'>"
+                                   + "<h2 style='color:#0ea5e9;'>FitZone Pro</h2>"
+                                   + "<p>Merhaba,</p>"
+                                   + "<p>Hesabınız için bir şifre sıfırlama isteği aldık. Şifrenizi sıfırlamak için aşağıdaki butona tıklayın:</p>"
+                                   + "<div style='text-align:center;margin:30px 0;'>"
+                                   + "<a href='" + resetLink + "' style='background:#6366f1;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;'>Şifremi Sıfırla</a>"
+                                   + "</div>"
+                                   + "<p style='font-size:12px;color:#777;'>Bu isteği siz yapmadıysanız, bu e-postayı dikkate almayınız.</p>"
+                                   + "</div>";
+
+                message.setContent(htmlContent, "text/html; charset=utf-8");
+
+                Transport.send(message);
+                System.out.println("✅ E-posta başarıyla gönderildi: " + toEmail);
+            } catch (Exception e) {
+                System.out.println("❌ E-posta gönderim hatası (Gmail bağlanamadı veya yetki yok): " + e.getMessage());
+            }
         }
     }
 }
