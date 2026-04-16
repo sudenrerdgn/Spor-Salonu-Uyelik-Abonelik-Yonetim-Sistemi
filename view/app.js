@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════
+﻿// ═══════════════════════════════════════════
 // FitZone Pro — app.js
 // Sadece Frontend Demo Verileri
 // Backend bağlantısı yapılacak
@@ -927,8 +927,12 @@ function renderAboneliklerPage() {
       const c = colorMap[p.ad] || { color:'#94a3b8', bg:'rgba(148,163,184,.15)' };
       const icon = iconMap[p.ad] || '📋';
       const oz = Array.isArray(p.ozellikler) ? p.ozellikler.join(', ') : '';
-      planContainer.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${c.bg};color:${c.color};font-size:18px;">${icon}</div><div><div class="plan-name">${p.ad}</div><div class="plan-members">${p.aktifUye} aktif üye · ${p.sureAy} ay · ${oz}</div></div></div><div class="plan-price" style="color:${c.color}">₺${Math.round(p.fiyat)}/ay</div></div>`;
-  });
+      // Üye rolundeyse "Plan Seç" butonu göster
+      const satinAlBtn = currentRole === 'uye'
+        ? `<button onclick="handlePlanSatinAl(${p.id},'${p.ad}',${p.fiyat})" style="margin-left:auto;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44;border-radius:8px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Seç</button>`
+        : '';
+      planContainer.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${c.bg};color:${c.color};font-size:18px;">${icon}</div><div><div class="plan-name">${p.ad}</div><div class="plan-members">${p.aktifUye} aktif üye · ${p.sureAy} ay · ${oz}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><div class="plan-price" style="color:${c.color}">₺${Math.round(p.fiyat)}/ay</div>${satinAlBtn}</div></div>`;
+    });
     planContainer.innerHTML += '</div>';
 
   // Plan chart
@@ -943,15 +947,29 @@ function renderAboneliklerPage() {
   }
 
   // Abonelik tablosu API'den
-  fetch(API_URL + '/api/abonelikler').then(r => r.json()).then(abonelikler => {
+  apiFetch('/api/abonelikler').then(abonelikler => {
     const tbody = document.getElementById('aboneliklerTableBody');
     if (!tbody) return;
     const durumLabel = { aktif:'Aktif', pasif:'Pasif', iptal:'İptal', suresi_doldu:'Süresi Doldu' };
     tbody.innerHTML = '';
     const currentProfile = roleProfiles[currentRole];
-    const filteredAbonelikler = currentRole === 'uye'
-      ? abonelikler.filter(a => a.uye === currentProfile.name)
-      : abonelikler;
+    const filteredAbonelikler = abonelikler;
+
+    const tCount = filteredAbonelikler.length;
+    const aCount = filteredAbonelikler.filter(a => a.durum === 'aktif').length;
+    const sCount = filteredAbonelikler.filter(a => a.durum === 'suresi_doldu').length;
+    const planSet = new Set(filteredAbonelikler.map(a => a.plan));
+    const pCount = planSet.size;
+
+    const el1 = document.getElementById('abonelikTotalCount');
+    const el2 = document.getElementById('abonelikAktifCount');
+    const el3 = document.getElementById('abonelikSuresiDolmusCount');
+    const el4 = document.getElementById('abonelikPlanSayisi');
+    if (el1) el1.textContent = tCount;
+    if (el2) el2.textContent = aCount;
+    if (el3) el3.textContent = sCount;
+    if (el4) el4.textContent = pCount;
+
     filteredAbonelikler.forEach((a, idx) => {
       const color = avatarColors[idx % avatarColors.length];
       const pKey = a.plan.toLowerCase();
@@ -965,7 +983,10 @@ function renderAboneliklerPage() {
         <td><span class="status-dot ${a.durum}">${durumLabel[a.durum]}</span></td>
         <td><div style="display:flex;gap:6px"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;"><i class="fas fa-clock-rotate-left" style="color:#fbbf24"></i></div></div></td></tr>`;
     });
-  }).catch(() => {});
+  }).catch(() => {
+    // Bekleyen ödemeleri de fallback'te göster
+    renderBekleyenOdemelerSection([]);
+  });
   }).catch(() => {});
 }
 
@@ -1001,8 +1022,16 @@ function renderOdemelerTable(data) {
   });
 }
 
+let odemelerCachedData = [];
 function renderOdemelerPage() {
-  fetch(API_URL + '/api/odemeler').then(r => r.json()).then(apiData => {
+  // Bekleyen ödemeleri ayrı section olarak yükle (sadece üye)
+  if (currentRole === 'uye') {
+    apiFetch('/api/abonelikler').then(abonelikler => {
+      const bekleyenler = abonelikler.filter(a => a.durum === 'pasif');
+      renderBekleyenOdemelerSection(bekleyenler);
+    }).catch(() => renderBekleyenOdemelerSection([]));
+  }
+  apiFetch('/api/odemeler').then(apiData => {
     odemelerCachedData = apiData;
     const currentProfile = roleProfiles[currentRole];
     const veri = currentRole === 'uye'
@@ -1028,7 +1057,7 @@ function renderOdemelerPage() {
     renderOdemelerTable(veri);
   });
 }
-let odemelerCachedData = [];
+
 function filterOdemeler(st) {
   const currentProfile = roleProfiles[currentRole];
   const source = odemelerCachedData.length > 0 ? odemelerCachedData : odemelerData;
@@ -1037,6 +1066,89 @@ function filterOdemeler(st) {
     : source;
   renderOdemelerTable(st === 'hepsi' ? veri : veri.filter(o => o.durum === st));
 }
+
+// ═══════════════════════════════════════════
+// BEKLEYEN ÖDEMELER SECTION (sadece üye)
+// ═══════════════════════════════════════════
+function renderBekleyenOdemelerSection(bekleyenler) {
+  const container = document.getElementById('bekleyenOdemelerSection');
+  if (!container) return;
+  if (!bekleyenler || bekleyenler.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  const tbody = document.getElementById('bekleyenOdemelerBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const planIcons = { 'Platinum':'💎', 'Gold':'⭐', 'Silver':'🥈', 'Basic':'🔰' };
+  const planColors2 = { 'Platinum':'#a78bfa', 'Gold':'#fbbf24', 'Silver':'#94a3b8', 'Basic':'#67e8f9' };
+  bekleyenler.forEach(a => {
+    const icon  = planIcons[a.plan]  || '📋';
+    const color = planColors2[a.plan] || '#94a3b8';
+    tbody.innerHTML += `<tr>
+      <td><span style="font-size:18px">${icon}</span> <span class="m-name" style="color:${color}">${a.plan}</span></td>
+      <td style="color:var(--text-muted);font-size:12px">${a.baslangic} → ${a.bitis}</td>
+      <td><span style="font-size:11px;background:rgba(251,191,36,.1);color:#fbbf24;padding:4px 10px;border-radius:20px;font-weight:600;">Beklemede</span></td>
+      <td>
+        <select id="yontem_${a.id}" style="background:var(--glass);border:1px solid var(--glass-border);border-radius:8px;padding:5px 8px;color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:11px;outline:none;cursor:pointer;margin-right:6px;">
+          <option value="kredi_karti">Kredi Kart\u0131</option>
+          <option value="nakit">Nakit</option>
+          <option value="havale">Havale</option>
+          <option value="online" selected>Online</option>
+        </select>
+        <button onclick="handleOdemeYap(${a.id})" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">\uD83D\uDCB3 Öde</button>
+      </td>
+    </tr>`;
+  });
+}
+
+// Plan Seç — abonelik-satin-al endpoint’ine istek at
+function handlePlanSatinAl(planId, planAdi, fiyat) {
+  showToast('Plan seciliyor...');
+  apiFetch('/api/abonelik-satin-al', {
+    method: 'POST',
+    body: JSON.stringify({ plan_id: String(planId) })
+  })
+  .then(data => {
+    if (data.basarili) {
+      showToast(`✅ ${planAdi} planı seçildi! Ödemeler sayfasından ödeme yapabilirsiniz.`);
+      setTimeout(() => {
+        const odLink = document.querySelector('[data-page="odemeler"]');
+        if (odLink) navigateTo('odemeler', odLink);
+      }, 1200);
+    } else {
+      showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
+    }
+  })
+  .catch(e => {
+    if (e.message === 'AUTH_ERROR') showToast('⚠️ Giriş yapmanız gerekiyor!');
+    else showToast('❌ Bağlantı hatası: ' + e.message);
+  });
+}
+
+// Öde butonu — odeme-yap endpoint’ine istek at
+function handleOdemeYap(abonelikId) {
+  const yontemEl = document.getElementById('yontem_' + abonelikId);
+  const yontem   = yontemEl ? yontemEl.value : 'online';
+  apiFetch('/api/odeme-yap', {
+    method: 'POST',
+    body: JSON.stringify({ abonelik_id: String(abonelikId), odeme_yontemi: yontem })
+  })
+  .then(data => {
+    if (data.basarili) {
+      showToast('✅ ' + data.mesaj);
+      renderOdemelerPage();
+    } else {
+      showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
+    }
+  })
+  .catch(e => {
+    if (e.message === 'AUTH_ERROR') showToast('⚠️ Giriş yapmanız gerekiyor!');
+    else showToast('❌ Bağlantı hatası: ' + e.message);
+  });
+}
+
 
 // ═══════════════════════════════════════════
 // DERSLER SAYFASI
@@ -1376,7 +1488,16 @@ function submitProfilGuncelle() {
 let currentRole = null;
 
 // --- Modal helpers ---
-function showLoginModal()    { document.getElementById('loginModal').classList.add('open'); }
+function showLoginModal() {
+  document.getElementById('loginModal').classList.add('open');
+  // Beni Hatırla: kayıtlı credential varsa doldur
+  const saved = JSON.parse(localStorage.getItem('fitzone_remember') || 'null');
+  if (saved && saved.email) {
+    document.getElementById('loginEmail').value    = saved.email;
+    document.getElementById('loginPassword').value = saved.sifre || '';
+    document.getElementById('rememberMe').checked  = true;
+  }
+}
 function closeLoginModal()   { document.getElementById('loginModal').classList.remove('open'); }
 function showRegisterModal() { document.getElementById('registerModal').classList.add('open'); }
 function closeRegisterModal(){ document.getElementById('registerModal').classList.remove('open'); }
@@ -1384,6 +1505,20 @@ function showForgotModal()   { document.getElementById('forgotModal').classList.
 function closeForgotModal()  { document.getElementById('forgotModal').classList.remove('open'); }
 function showResetModal()    { document.getElementById('resetPasswordModal').classList.add('open'); }
 function closeResetModal()   { document.getElementById('resetPasswordModal').classList.remove('open'); }
+
+// Beni Hatırla: email inputuna yazınca kayıtlı şifreyi otomatik getir
+function onLoginEmailInput() {
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const saved = JSON.parse(localStorage.getItem('fitzone_remember') || 'null');
+  if (saved && saved.email === email) {
+    document.getElementById('loginPassword').value = saved.sifre || '';
+    document.getElementById('rememberMe').checked  = true;
+  } else {
+    // Eşleşme yoksa şifre alanını temizle (kullanıcı başka mail yazdıysa)
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('rememberMe').checked  = false;
+  }
+}
 
 // --- Login handler — email + şifre ile giriş (API destekli) ---
 function handleLogin() {
@@ -1412,6 +1547,13 @@ function handleLogin() {
       if (data.token) {
         setToken(data.token);
         localStorage.setItem('fitzone_user', JSON.stringify(data.kullanici));
+      }
+      // Beni Hatırla: checkbox durumuna göre kaydet veya sil
+      const rememberChecked = document.getElementById('rememberMe').checked;
+      if (rememberChecked) {
+        localStorage.setItem('fitzone_remember', JSON.stringify({ email, sifre }));
+      } else {
+        localStorage.removeItem('fitzone_remember');
       }
       const k = data.kullanici;
       const user = { id: k.id, ad: k.ad, soyad: k.soyad, email: k.email, rol: k.rol, telefon: k.telefon || '', name: k.ad + ' ' + k.soyad };

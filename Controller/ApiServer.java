@@ -29,8 +29,8 @@ import javax.crypto.spec.SecretKeySpec;
  * JWT Auth + IP Rate Limiting + Rol Tabanlı Erişim Kontrolü
  *
  * Çalıştırmak için (proje kök dizininden):
- *   javac -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller/ApiServer.java Controller/DatabaseBaglanti.java
- *   java  -cp ".;mssql-jdbc-12.4.2.jre11.jar" Controller.ApiServer
+ *   javac -cp ".;mssql-jdbc-12.4.2.jre11.jar;javax.mail-1.6.2.jar;activation-1.1.1.jar" Controller/ApiServer.java Controller/DatabaseBaglanti.java
+ *   java  -cp ".;mssql-jdbc-12.4.2.jre11.jar;javax.mail-1.6.2.jar;activation-1.1.1.jar" Controller.ApiServer
  *
  * Public (token gerekmez):
  *   POST /api/kayit        → Yeni üye kaydı
@@ -95,6 +95,8 @@ public class ApiServer {
         server.createContext("/api/odemeler",          new OdemelerHandler());
         server.createContext("/api/abonelikler",       new AboneliklerHandler());
         server.createContext("/api/profil-guncelle",   new ProfilGuncelleHandler());
+        server.createContext("/api/abonelik-satin-al", new AbonelikSatinAlHandler());
+        server.createContext("/api/odeme-yap",         new OdemeYapHandler());
 
         // ── Tüm giriş yapmış kullanıcılar ────────────────────
         server.createContext("/api/dersler",           new DerslerHandler());
@@ -1294,6 +1296,178 @@ public class ApiServer {
     // ═══════════════════════════════════════════════════
     // MAİL GÖNDERİM YARDIMCISI (Javax.Mail / SMTP)
     // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════
+    // ABONELIK SATIN AL — POST /api/abonelik-satin-al  [Üye]
+    // Bekleyen ödeme kaydı oluşturur (odemeler tablosuna beklemede olarak ekler)
+    // ═══════════════════════════════════════════════════
+    static class AbonelikSatinAlHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+            String[] u = authUser(ex);
+            System.out.println("?? /api/abonelik-satin-al istegi - auth: " + (u==null?"NULL":u[2]));
+            if (u==null) { sendResponse(ex,401,errJson("Giriş yapmanız gerekiyor!","UNAUTHORIZED")); return; }
+
+            String body    = readBody(ex);
+            String planId  = jsonValue(body, "plan_id");
+            System.out.println("?? body: " + body + " | planId: " + planId);
+            if (planId==null) { sendResponse(ex,400,errJson("Plan ID gerekli!","BAD_REQUEST")); return; }
+
+            int kullaniciId = Integer.parseInt(u[0]);
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+
+                // Plan bilgilerini al
+                PreparedStatement ps = conn.prepareStatement(
+                    "SELECT plan_id,plan_adi,fiyat,sure_ay FROM uye_planlari WHERE plan_id=? AND durum=N'aktif'");
+                ps.setInt(1, Integer.parseInt(planId));
+                ResultSet rs = ps.executeQuery();
+                if (!rs.next()) {
+                    rs.close(); ps.close();
+                    sendResponse(ex,404,errJson("Plan bulunamadı!","NOT_FOUND")); return;
+                }
+                int    pId     = rs.getInt("plan_id");
+                String pAdi    = rs.getString("plan_adi");
+                double fiyat   = rs.getDouble("fiyat");
+                int    sureAy  = rs.getInt("sure_ay");
+                rs.close(); ps.close();
+
+                // Üye uyeler tablosunda var mı? (kayit anında ekleniyor ama kontrol edelim)
+                PreparedStatement uq = conn.prepareStatement(
+                    "SELECT uye_id FROM uyeler WHERE kullanici_id=?");
+                uq.setInt(1, kullaniciId);
+                ResultSet ur = uq.executeQuery();
+                int uyeId = -1;
+                if (ur.next()) uyeId = ur.getInt("uye_id");
+                ur.close(); uq.close();
+
+                // uyeler'de yoksa ekle (eski kullanıcılar için güvenlik)
+                if (uyeId < 0) {
+                    Statement cs = conn.createStatement();
+                    ResultSet cr = cs.executeQuery("SELECT COUNT(*) AS cnt FROM uyeler");
+                    int cnt = cr.next() ? cr.getInt("cnt") : 0; cr.close(); cs.close();
+                    String uNo = String.format("FZ-%d-%03d", java.time.Year.now().getValue(), cnt+1);
+                    PreparedStatement ins = conn.prepareStatement(
+                        "INSERT INTO uyeler(kullanici_id,uyelik_no) VALUES(?,?)",
+                        java.sql.Statement.RETURN_GENERATED_KEYS);
+                    ins.setInt(1, kullaniciId);
+                    ins.setString(2, uNo);
+                    ins.executeUpdate();
+                    ResultSet gk = ins.getGeneratedKeys();
+                    if (gk.next()) uyeId = gk.getInt(1);
+                    gk.close(); ins.close();
+                }
+
+                // Aktif bekleyen abonelik var mı? Varsa güncelle
+                // Yeni gecici abonelik kaydı oluştur (pasif — ödeme yapılınca aktif olacak)
+                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate bitis = today.plusMonths(sureAy);
+
+                PreparedStatement ab = conn.prepareStatement(
+                    "INSERT INTO uye_abonelikleri(uye_id,plan_id,baslangic_tarihi,bitis_tarihi,durum) VALUES(?,?,?,?,N'pasif')",
+                    java.sql.Statement.RETURN_GENERATED_KEYS);
+                ab.setInt(1, uyeId);
+                ab.setInt(2, pId);
+                ab.setDate(3, java.sql.Date.valueOf(today));
+                ab.setDate(4, java.sql.Date.valueOf(bitis));
+                ab.executeUpdate();
+                ResultSet abk = ab.getGeneratedKeys();
+                int abonelikId = -1;
+                if (abk.next()) abonelikId = abk.getInt(1);
+                abk.close(); ab.close();
+
+                // Bekleyen ödeme kaydı oluştur
+                PreparedStatement od = conn.prepareStatement(
+                    "INSERT INTO odemeler(abonelik_id,miktar,odeme_yontemi,durum,aciklama) VALUES(?,?,N'online',N'beklemede',?)");
+                od.setInt(1, abonelikId);
+                od.setDouble(2, fiyat);
+                od.setString(3, pAdi + " planı - bekleyen ödeme");
+                od.executeUpdate(); od.close();
+
+                System.out.println("✅ Abonelik satın alma isteği: kullanici_id="+kullaniciId+" plan="+pAdi);
+                sendResponse(ex,200,String.format(
+                    "{\"basarili\":true,\"mesaj\":\"Plan seçildi! Ödeme bekleniyor.\"," +
+                    "\"abonelik_id\":%d,\"plan\":\"%s\",\"fiyat\":%.2f}",
+                    abonelikId, pAdi, fiyat));
+
+            } catch (Exception e) {
+                System.out.println("❌ Abonelik satın alma hatası: "+e.getMessage());
+                sendResponse(ex,500,errJson("Veritabanı hatası: "+e.getMessage().replace("\"","'"),"DB_ERROR"));
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ODEME YAP — POST /api/odeme-yap  [Üye]
+    // Ödemeyi tamamlar: abonelik aktif edilir, ödeme tamamlandi yapılır
+    // ═══════════════════════════════════════════════════
+    static class OdemeYapHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+            String[] u = authUser(ex);
+            System.out.println(">> /api/odeme-yap istegi - auth: " + (u==null?"NULL":u[2]));
+            if (u==null) { sendResponse(ex,401,errJson("Giriş yapmanız gerekiyor!","UNAUTHORIZED")); return; }
+            // Admin ve üye ödeme yapabilir
+            if (!"uye".equals(u[2]) && !"admin".equals(u[2])) {
+                sendResponse(ex,403,errJson("Bu işlem için yetkiniz yok!","FORBIDDEN")); return;
+            }
+
+            String body       = readBody(ex);
+            String abonelikId = jsonValue(body, "abonelik_id");
+            String yontem     = jsonValue(body, "odeme_yontemi");
+            if (abonelikId==null) { sendResponse(ex,400,errJson("Abonelik ID gerekli!","BAD_REQUEST")); return; }
+            if (yontem==null || yontem.isEmpty()) yontem = "online";
+
+            int kullaniciId = Integer.parseInt(u[0]);
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+
+                // Aboneliğin bu kullanıcıya ait olduğunu doğrula
+                PreparedStatement chk = conn.prepareStatement(
+                    "SELECT a.abonelik_id,a.durum FROM uye_abonelikleri a " +
+                    "JOIN uyeler uy ON a.uye_id=uy.uye_id " +
+                    "WHERE a.abonelik_id=? AND uy.kullanici_id=?");
+                chk.setInt(1, Integer.parseInt(abonelikId));
+                chk.setInt(2, kullaniciId);
+                ResultSet cr = chk.executeQuery();
+                if (!cr.next()) {
+                    cr.close(); chk.close();
+                    sendResponse(ex,403,errJson("Bu aboneliğe erişim yetkiniz yok!","FORBIDDEN")); return;
+                }
+                String abonelikDurum = cr.getString("durum");
+                cr.close(); chk.close();
+                if (!"pasif".equals(abonelikDurum)) {
+                    sendResponse(ex,400,errJson("Bu abonelik zaten aktif veya iptal edilmiş!","INVALID_STATE")); return;
+                }
+
+                // Aboneliği aktif yap
+                PreparedStatement upd = conn.prepareStatement(
+                    "UPDATE uye_abonelikleri SET durum=N'aktif' WHERE abonelik_id=?");
+                upd.setInt(1, Integer.parseInt(abonelikId));
+                upd.executeUpdate(); upd.close();
+
+                // Ödemeyi tamamlandi yap + yöntemi güncelle
+                PreparedStatement pod = conn.prepareStatement(
+                    "UPDATE odemeler SET durum=N'tamamlandi', odeme_yontemi=?, odeme_tarihi=GETDATE() " +
+                    "WHERE abonelik_id=? AND durum=N'beklemede'");
+                pod.setString(1, yontem);
+                pod.setInt(2, Integer.parseInt(abonelikId));
+                pod.executeUpdate(); pod.close();
+
+                System.out.println("✅ Ödeme tamamlandı: abonelik_id="+abonelikId+" kullanici="+kullaniciId);
+                sendResponse(ex,200,
+                    "{\"basarili\":true,\"mesaj\":\"\u00d6deme başarıyla tamamlandı! Aboneliğiniz aktif edildi.\"}");
+
+            } catch (Exception e) {
+                System.out.println("❌ Ödeme hatası: "+e.getMessage());
+                sendResponse(ex,500,errJson("Veritabanı hatası: "+e.getMessage().replace("\"","'"),"DB_ERROR"));
+            }
+        }
+    }
+
     static class MailSender {
         // LÜTFEN KENDİ GMAIL ADRESİNİZİ VE "UYGULAMA ŞİFRENİZİ" (App Password) BURAYA YAZIN
         static final String username = "fitzonedestek@gmail.com"; 

@@ -675,28 +675,28 @@ Gemini
                         <div class="stat-top">
                             <div class="stat-icon"><i class="fas fa-id-card"></i></div>
                         </div>
-                        <div class="stat-value">8</div>
+                        <div class="stat-value" id="abonelikTotalCount">0</div>
                         <div class="stat-label">Toplam Abonelik</div>
                     </div>
                     <div class="stat-card c2">
                         <div class="stat-top">
                             <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
                         </div>
-                        <div class="stat-value">7</div>
+                        <div class="stat-value" id="abonelikAktifCount">0</div>
                         <div class="stat-label">Aktif</div>
                     </div>
                     <div class="stat-card c3">
                         <div class="stat-top">
                             <div class="stat-icon"><i class="fas fa-clock"></i></div>
                         </div>
-                        <div class="stat-value">1</div>
+                        <div class="stat-value" id="abonelikSuresiDolmusCount">0</div>
                         <div class="stat-label">Süresi Dolmuş</div>
                     </div>
                     <div class="stat-card c4">
                         <div class="stat-top">
                             <div class="stat-icon"><i class="fas fa-crown"></i></div>
                         </div>
-                        <div class="stat-value">4</div>
+                        <div class="stat-value" id="abonelikPlanSayisi">0</div>
                         <div class="stat-label">Plan Sayısı</div>
                     </div>
                 </div>
@@ -747,6 +747,27 @@ Gemini
                     <div class="topbar-right"><button class="btn-primary" onclick="showToast('Ödeme alma yakında!')"><i
                                 class="fas fa-plus"></i> Ödeme Al</button></div>
                 </div>
+
+                <!-- BEKLEYEN ÖDEMELER (sadece üye, dinamik gizli/gösterili) -->
+                <div id="bekleyenOdemelerSection" class="glass-card" style="display:none;margin-bottom:20px;border:1px solid rgba(251,191,36,.3);">
+                    <div class="card-header">
+                        <div class="card-title" style="color:#fbbf24;"><i class="fas fa-clock" style="margin-right:8px;"></i>Bekleyen Ödemeler</div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>PLAN</th>
+                                    <th>SÜRE</th>
+                                    <th>DURUM</th>
+                                    <th>ÖDEME YAP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bekleyenOdemelerBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="stats-grid">
                     <div class="stat-card c1">
                         <div class="stat-top">
@@ -1439,7 +1460,7 @@ Gemini
             <h2><i class="fas fa-right-to-bracket" style="color:var(--accent-cyan);margin-right:8px;"></i>Giriş Yap</h2>
             <p>FitZone Pro hesabınıza giriş yapın.</p>
             <div class="form-field" style="margin-bottom:14px;"><label>E-posta</label><input type="email"
-                    id="loginEmail" placeholder="ornek@mail.com"></div>
+                    id="loginEmail" placeholder="ornek@mail.com" oninput="onLoginEmailInput()"></div>
             <div class="form-field" style="margin-bottom:14px;"><label>Şifre</label><input type="password"
                     id="loginPassword" placeholder="••••••••"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
