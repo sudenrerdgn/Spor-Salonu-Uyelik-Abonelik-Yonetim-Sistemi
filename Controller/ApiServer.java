@@ -865,6 +865,27 @@ public class ApiServer {
 
             try {
                 Connection conn=DatabaseBaglanti.baglantiGetir();
+
+                // ADIM 1: Her üye için en yüksek abonelik_id'li kaydı bul, diğerlerini 'iptal' yap.
+                // CTE kullanarak daha güvenilir bir temizlik yapıyoruz.
+                conn.createStatement().executeUpdate(
+                    "WITH LatestPerMember AS (" +
+                    "  SELECT abonelik_id, uye_id, " +
+                    "         ROW_NUMBER() OVER (PARTITION BY uye_id ORDER BY abonelik_id DESC) AS rn " +
+                    "  FROM uye_abonelikleri" +
+                    ") " +
+                    "UPDATE uye_abonelikleri SET durum = N'iptal' " +
+                    "WHERE abonelik_id IN (" +
+                    "  SELECT abonelik_id FROM LatestPerMember WHERE rn > 1" +
+                    ") AND durum <> N'iptal'");
+
+                // ADIM 2: En son kaydı olan ve süresi dolmuş aktif abonelikleri işaretle
+                conn.createStatement().executeUpdate(
+                    "UPDATE uye_abonelikleri SET durum = N'suresi_doldu' " +
+                    "WHERE durum = N'aktif' AND bitis_tarihi < CAST(GETDATE() AS DATE)");
+
+                System.out.println("[Cleanup] Uye-basi tek abonelik kurali uygulandı.");
+
                 PreparedStatement stmt;
                 String baseQ=
                     "SELECT a.abonelik_id,k.ad,k.soyad,p.plan_adi," +
@@ -912,6 +933,13 @@ public class ApiServer {
             if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
             try {
                 Connection conn=DatabaseBaglanti.baglantiGetir();
+                
+                // Lazy Cleanup — her üye için yalnızca en son aboneliği tut
+                conn.createStatement().executeUpdate(
+                    "WITH CTE AS (SELECT abonelik_id, ROW_NUMBER() OVER(PARTITION BY uye_id ORDER BY abonelik_id DESC) as rn " +
+                    "FROM uye_abonelikleri) " +
+                    "UPDATE uye_abonelikleri SET durum=N'iptal' WHERE abonelik_id IN (SELECT abonelik_id FROM CTE WHERE rn > 1) AND durum <> N'iptal'");
+
                 Statement stmt=conn.createStatement();
                 ResultSet rs=stmt.executeQuery(
                     "SELECT p.plan_id,p.plan_adi,p.fiyat,p.sure_ay,p.aciklama,p.ozellikler,p.durum," +
@@ -1359,8 +1387,17 @@ public class ApiServer {
                     gk.close(); ins.close();
                 }
 
-                // Aktif bekleyen abonelik var mı? Varsa güncelle
-                // Yeni gecici abonelik kaydı oluştur (pasif — ödeme yapılınca aktif olacak)
+                // Mevcut tÜM aktif veya pasif abonelikleri iptal et (bir üye = bir plan kuralı)
+                PreparedStatement cancelOld = conn.prepareStatement(
+                    "UPDATE uye_abonelikleri SET durum=N'iptal' " +
+                    "WHERE uye_id=? AND durum IN (N'aktif', N'pasif', N'suresi_doldu')");
+                cancelOld.setInt(1, uyeId);
+                int cancelledCount = cancelOld.executeUpdate();
+                cancelOld.close();
+                System.out.println("?? SAtın Alma Öncesi Temizlik: uye_id=" + uyeId + " - " + cancelledCount + " kayıt 'iptal' yapıldı.");
+
+                // Yeni pasif abonelik kaydı oluştur (ödeme yapılınca aktif olacak)
+                // TALEP: Basic 1ay, Silver 3ay, Gold 6ay, Platinum 12ay.
                 java.time.LocalDate today = java.time.LocalDate.now();
                 java.time.LocalDate bitis = today.plusMonths(sureAy);
 

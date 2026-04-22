@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
 // FitZone Pro — app.js
 // Sadece Frontend Demo Verileri
 // Backend bağlantısı yapılacak
@@ -918,76 +918,142 @@ let planChartInstance = null;
 function renderAboneliklerPage() {
   const planContainer = document.getElementById('abonelikPlanCards');
   if (!planContainer) return;
+
+  // Üye için aktif abonelik banner
+  if (currentRole === 'uye') {
+    apiFetch('/api/abonelikler').then(abonelikler => {
+      const aktif = abonelikler.find(a => a.durum === 'aktif');
+      const banner = document.getElementById('aktifAbonelikBanner');
+      if (banner && aktif) {
+        const pKey = (aktif.plan || '').toLowerCase();
+        const p = planColors[pKey] || planColors.basic;
+        banner.style.display = '';
+        banner.innerHTML = `<div style="display:flex;align-items:center;gap:14px;background:${p.bg};border:1px solid ${p.color}44;border-radius:14px;padding:16px 20px;margin-bottom:18px;"><span style="font-size:28px">${p.icon}</span><div style="flex:1"><div style="font-size:15px;font-weight:700;color:${p.color}">${aktif.plan} Paketi — Aktif</div><div style="font-size:12px;color:var(--text-muted);margin-top:3px">Başlangıç: ${aktif.baslangic} &rarr; Bitiş: ${aktif.bitis}</div></div><span style="font-size:11px;background:rgba(74,222,128,.12);color:#4ade80;padding:5px 14px;border-radius:20px;font-weight:700;">✓ Aktif</span></div>`;
+      } else if (banner) { banner.style.display = 'none'; }
+      _renderAbonelikTablosu(abonelikler);
+    }).catch(() => _renderAbonelikTablosu([]));
+  }
+
   // API'den planları çek
-  fetch(API_URL + '/api/planlar').then(r => r.json()).then(plans => {
+  apiFetch('/api/planlar').then(plans => {
     const iconMap = { 'Platinum':'💎', 'Gold':'⭐', 'Silver':'🥈', 'Basic':'🔰' };
     const colorMap = { 'Platinum':{ color:'#a78bfa', bg:'rgba(139,92,246,.15)' }, 'Gold':{ color:'#fbbf24', bg:'rgba(251,191,36,.15)' }, 'Silver':{ color:'#94a3b8', bg:'rgba(148,163,184,.15)' }, 'Basic':{ color:'#67e8f9', bg:'rgba(34,211,238,.1)' } };
     planContainer.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;">';
     plans.forEach(p => {
       const c = colorMap[p.ad] || { color:'#94a3b8', bg:'rgba(148,163,184,.15)' };
       const icon = iconMap[p.ad] || '📋';
-      const oz = Array.isArray(p.ozellikler) ? p.ozellikler.join(', ') : '';
+      const oz = Array.isArray(p.ozellikler) ? p.ozellikler.join(' · ') : (typeof p.ozellikler === 'string' ? p.ozellikler : '');
       // Üye rolundeyse "Plan Seç" butonu göster
       const satinAlBtn = currentRole === 'uye'
-        ? `<button onclick="handlePlanSatinAl(${p.id},'${p.ad}',${p.fiyat})" style="margin-left:auto;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44;border-radius:8px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Seç</button>`
+        ? `<button onclick="handlePlanSatinAl(${p.id},'${p.ad}',${p.fiyat})" style="margin-left:auto;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;" onmouseover="this.style.background='${c.color}';this.style.color='#fff'" onmouseout="this.style.background='${c.color}22';this.style.color='${c.color}'">✓ Seç</button>`
         : '';
       planContainer.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${c.bg};color:${c.color};font-size:18px;">${icon}</div><div><div class="plan-name">${p.ad}</div><div class="plan-members">${p.aktifUye} aktif üye · ${p.sureAy} ay · ${oz}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><div class="plan-price" style="color:${c.color}">₺${Math.round(p.fiyat)}/ay</div>${satinAlBtn}</div></div>`;
     });
     planContainer.innerHTML += '</div>';
 
-  // Plan chart
-  const ctx = document.getElementById('planChart');
-  if (ctx) {
-    if (planChartInstance) planChartInstance.destroy();
-    planChartInstance = new Chart(ctx.getContext('2d'), {
-      type:'doughnut',
-      data:{ labels:['Platinum','Gold','Silver','Basic'], datasets:[{ data:[3,2,2,1], backgroundColor:['#a78bfa','#fbbf24','#94a3b8','#67e8f9'], borderWidth:0 }] },
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ color:'rgba(200,210,255,0.7)', padding:16, font:{size:12} } } } }
-    });
+    // Plan Dağılımı Grafiği (Doughnut) — Premium Tasarım (Gradyanlı)
+    const ctx = document.getElementById('planChart');
+    if (ctx) {
+      const c = ctx.getContext('2d');
+      if (planChartInstance) planChartInstance.destroy();
+
+      // Gradyan Oluşturucu
+      const createGrad = (c1, c2) => {
+        const g = c.createLinearGradient(0, 0, 0, 300);
+        g.addColorStop(0, c1);
+        g.addColorStop(1, c2);
+        return g;
+      };
+
+      const g1 = createGrad('#8b5cf6', '#6d28d9'); // Violet
+      const g2 = createGrad('#f59e0b', '#d97706'); // Amber
+      const g3 = createGrad('#64748b', '#334155'); // Slate
+      const g4 = createGrad('#06b6d4', '#0891b2'); // Cyan
+      const premiumColors = [g1, g2, g3, g4];
+
+      planChartInstance = new Chart(c, {
+        type:'doughnut',
+        data:{ 
+          labels:plans.map(p2=>p2.ad), 
+          datasets:[{ 
+            data:plans.map(p2=>p2.aktifUye), 
+            backgroundColor: premiumColors,
+            borderWidth: 0,
+            hoverOffset: 15,
+            borderRadius: 6,
+            spacing: 4
+          }] 
+        },
+        options:{ 
+          responsive:true, maintainAspectRatio:false, cutout: '78%',
+          plugins:{ 
+            legend:{ position:'bottom', labels:{ color:'rgba(241,245,249,0.9)', padding:22, font:{size:13, weight:'500'} } },
+            tooltip: {
+              backgroundColor: 'rgba(15,23,42,0.95)', padding: 12, cornerRadius: 10,
+              titleFont: { size:14, weight:'700' }, bodyFont: { size:13 }
+            }
+          } 
+        }
+      });
+    }
+
+    // Tabloyu yükle
+    if (currentRole === 'admin') {
+      apiFetch('/api/abonelikler').then(ab => _renderAbonelikTablosu(ab)).catch(() => _renderAbonelikTablosu([]));
+    }
+  }).catch(() => {});
+}
+
+function _renderAbonelikTablosu(abonelikler) {
+  const tbody = document.getElementById('aboneliklerTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const tCount = abonelikler.length;
+  const aCount = abonelikler.filter(a => a.durum === 'aktif').length;
+  const sCount = abonelikler.filter(a => a.durum !== 'aktif' && a.durum !== 'pasif').length;
+  const pCount = new Set(abonelikler.map(a => a.plan)).size;
+  const el1 = document.getElementById('abonelikTotalCount');
+  const el2 = document.getElementById('abonelikAktifCount');
+  const el3 = document.getElementById('abonelikSuresiDolmusCount');
+  const el4 = document.getElementById('abonelikPlanSayisi');
+  if (el1) el1.textContent = tCount;
+  if (el2) el2.textContent = aCount;
+  if (el3) el3.textContent = sCount;
+  if (el4) el4.textContent = pCount;
+
+  if (abonelikler.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">Henüz abonelik yok.</td></tr>';
+    return;
   }
 
-  // Abonelik tablosu API'den
-  apiFetch('/api/abonelikler').then(abonelikler => {
-    const tbody = document.getElementById('aboneliklerTableBody');
-    if (!tbody) return;
-    const durumLabel = { aktif:'Aktif', pasif:'Pasif', iptal:'İptal', suresi_doldu:'Süresi Doldu' };
-    tbody.innerHTML = '';
-    const currentProfile = roleProfiles[currentRole];
-    const filteredAbonelikler = abonelikler;
+  // Aktif / bekleyen abonelikler (kişi başı max 1)
+  const aktifler = abonelikler.filter(a => a.durum === 'aktif' || a.durum === 'pasif');
+  // Eski abonelikler (iptal, suresi_doldu vs.)
+  const eskiler = abonelikler.filter(a => a.durum !== 'aktif' && a.durum !== 'pasif');
 
-    const tCount = filteredAbonelikler.length;
-    const aCount = filteredAbonelikler.filter(a => a.durum === 'aktif').length;
-    const sCount = filteredAbonelikler.filter(a => a.durum === 'suresi_doldu').length;
-    const planSet = new Set(filteredAbonelikler.map(a => a.plan));
-    const pCount = planSet.size;
+  const durumText = { aktif:'Aktif', pasif:'Ödeme Bekliyor', iptal:'Eski Abonelik', suresi_doldu:'Eski Abonelik' };
 
-    const el1 = document.getElementById('abonelikTotalCount');
-    const el2 = document.getElementById('abonelikAktifCount');
-    const el3 = document.getElementById('abonelikSuresiDolmusCount');
-    const el4 = document.getElementById('abonelikPlanSayisi');
-    if (el1) el1.textContent = tCount;
-    if (el2) el2.textContent = aCount;
-    if (el3) el3.textContent = sCount;
-    if (el4) el4.textContent = pCount;
+  const buildRow = (a, idx, isEski) => {
+    const color = avatarColors[idx % avatarColors.length];
+    const pKey = (a.plan || '').toLowerCase();
+    const p = planColors[pKey] || planColors.basic;
+    const durumClass = isEski ? 'iptal' : (a.durum === 'aktif' ? 'aktif' : 'pasif');
+    const rowOpacity = isEski ? 'opacity:0.5;' : '';
+    const actionBtn = currentRole === 'admin'
+      ? `<div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;"><i class="fas fa-pen"></i></div>`
+      : '';
+    return `<tr style="${rowOpacity}"><td><div class="member-info"><div class="m-avatar" style="background:${color}">${getInitials(a.uye)}</div><div class="m-name">${a.uye}</div></div></td><td><span class="plan-badge ${p.class}">${p.icon} ${a.plan}</span></td><td style="color:var(--text-muted);font-size:12px">${a.baslangic}</td><td style="color:var(--text-muted);font-size:12px">${a.bitis}</td><td style="text-align:center"><i class="fas ${a.otomatik?'fa-check-circle':'fa-times-circle'}" style="color:${a.otomatik?'#4ade80':'#f87171'}"></i></td><td><span class="status-dot ${durumClass}">${durumText[a.durum]||a.durum}</span></td><td><div style="display:flex;gap:6px">${actionBtn}</div></td></tr>`;
+  };
 
-    filteredAbonelikler.forEach((a, idx) => {
-      const color = avatarColors[idx % avatarColors.length];
-      const pKey = a.plan.toLowerCase();
-      const p = planColors[pKey] || planColors.basic;
-      tbody.innerHTML += `<tr>
-        <td><div class="member-info"><div class="m-avatar" style="background:${color}">${getInitials(a.uye)}</div><div class="m-name">${a.uye}</div></div></td>
-        <td><span class="plan-badge ${p.class}">${p.icon} ${a.plan}</span></td>
-        <td style="color:var(--text-muted);font-size:12px">${a.baslangic}</td>
-        <td style="color:var(--text-muted);font-size:12px">${a.bitis}</td>
-        <td style="text-align:center"><i class="fas ${a.otomatik?'fa-check-circle':'fa-times-circle'}" style="color:${a.otomatik?'#4ade80':'#f87171'}"></i></td>
-        <td><span class="status-dot ${a.durum}">${durumLabel[a.durum]}</span></td>
-        <td><div style="display:flex;gap:6px"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;"><i class="fas fa-clock-rotate-left" style="color:#fbbf24"></i></div></div></td></tr>`;
-    });
-  }).catch(() => {
-    // Bekleyen ödemeleri de fallback'te göster
-    renderBekleyenOdemelerSection([]);
-  });
-  }).catch(() => {});
+  // Önce aktif abonelikler
+  aktifler.forEach((a, idx) => { tbody.innerHTML += buildRow(a, idx, false); });
+
+  // Eski abonelikler varsa ayraç çiz + soluk satırlar
+  if (eskiler.length > 0) {
+    tbody.innerHTML += `<tr><td colspan="7" style="padding:12px 16px 6px;"><div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;height:1px;background:rgba(148,163,184,0.18);"></div><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);white-space:nowrap;">📁 Eski Abonelikler (${eskiler.length})</span><div style="flex:1;height:1px;background:rgba(148,163,184,0.18);"></div></div></td></tr>`;
+    eskiler.forEach((a, idx) => { tbody.innerHTML += buildRow(a, idx, true); });
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1024,18 +1090,22 @@ function renderOdemelerTable(data) {
 
 let odemelerCachedData = [];
 function renderOdemelerPage() {
-  // Bekleyen ödemeleri ayrı section olarak yükle (sadece üye)
+  // Bekleyen abonelikleri üst bölümde göster (sadece üye)
   if (currentRole === 'uye') {
     apiFetch('/api/abonelikler').then(abonelikler => {
       const bekleyenler = abonelikler.filter(a => a.durum === 'pasif');
       renderBekleyenOdemelerSection(bekleyenler);
     }).catch(() => renderBekleyenOdemelerSection([]));
+  } else {
+    const bekSec = document.getElementById('bekleyenOdemelerSection');
+    if (bekSec) bekSec.style.display = 'none';
   }
+
   apiFetch('/api/odemeler').then(apiData => {
     odemelerCachedData = apiData;
-    const currentProfile = roleProfiles[currentRole];
-    const veri = currentRole === 'uye'
-      ? apiData.filter(o => o.uye === currentProfile.name)
+    const savedUser = getSavedUser();
+    const veri = currentRole === 'uye' && savedUser
+      ? apiData.filter(o => o.uye === (savedUser.ad + ' ' + savedUser.soyad))
       : apiData;
     renderOdemelerTable(veri);
     const toplamGelir = veri.filter(o => o.durum !== 'iade').reduce((s, o) => s + o.miktar, 0);
@@ -1052,17 +1122,19 @@ function renderOdemelerPage() {
     if (elIade)   elIade.textContent   = iade;
   }).catch(() => {
     odemelerCachedData = odemelerData;
-    const currentProfile = roleProfiles[currentRole];
-    const veri = currentRole === 'uye' ? odemelerData.filter(o => o.uye === currentProfile.name) : odemelerData;
+    const savedUser = getSavedUser();
+    const veri = currentRole === 'uye' && savedUser
+      ? odemelerData.filter(o => o.uye === (savedUser.ad + ' ' + savedUser.soyad))
+      : odemelerData;
     renderOdemelerTable(veri);
   });
 }
 
 function filterOdemeler(st) {
-  const currentProfile = roleProfiles[currentRole];
+  const savedUser = getSavedUser();
   const source = odemelerCachedData.length > 0 ? odemelerCachedData : odemelerData;
-  let veri = currentRole === 'uye'
-    ? source.filter(o => o.uye === currentProfile.name)
+  let veri = currentRole === 'uye' && savedUser
+    ? source.filter(o => o.uye === (savedUser.ad + ' ' + savedUser.soyad))
     : source;
   renderOdemelerTable(st === 'hepsi' ? veri : veri.filter(o => o.durum === st));
 }
@@ -1104,19 +1176,21 @@ function renderBekleyenOdemelerSection(bekleyenler) {
 }
 
 // Plan Seç — abonelik-satin-al endpoint’ine istek at
+// Plan Seç — pasif abonelik + bekleyen ödeme oluştur
 function handlePlanSatinAl(planId, planAdi, fiyat) {
-  showToast('Plan seciliyor...');
+  showToast('⏳ Plan seçiliyor...');
   apiFetch('/api/abonelik-satin-al', {
     method: 'POST',
     body: JSON.stringify({ plan_id: String(planId) })
   })
   .then(data => {
     if (data.basarili) {
-      showToast(`✅ ${planAdi} planı seçildi! Ödemeler sayfasından ödeme yapabilirsiniz.`);
+      showToast('✅ ' + planAdi + ' seçildi! Lütfen ödemenizi tamamlayın.');
       setTimeout(() => {
         const odLink = document.querySelector('[data-page="odemeler"]');
         if (odLink) navigateTo('odemeler', odLink);
-      }, 1200);
+        else renderOdemelerPage();
+      }, 800);
     } else {
       showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
     }
@@ -1138,7 +1212,13 @@ function handleOdemeYap(abonelikId) {
   .then(data => {
     if (data.basarili) {
       showToast('✅ ' + data.mesaj);
+      // Ödemeler + abonelikler + dashboard yenile
       renderOdemelerPage();
+      setTimeout(() => {
+        renderAboneliklerPage();
+        loadDashboardStats();
+        loadMembersFromAPI().then(d => { if(d.length>0) { renderMembers(d); renderUyelerPage(d); } });
+      }, 500);
     } else {
       showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
     }
@@ -1762,6 +1842,12 @@ function loginAs(role, user) {
     if (isUye)     bg2.style.gridTemplateColumns = '1fr 1fr';
     if (isAntrenor) bg2.style.display = 'none';
   }
+
+  // Sadece admin'e özel butonlar
+  const abonelikPlanBtn = document.getElementById('abonelikYeniPlanBtn');
+  const odemeBtn        = document.getElementById('odemeAlBtn');
+  if (abonelikPlanBtn) abonelikPlanBtn.style.display = isAdmin ? '' : 'none';
+  if (odemeBtn)        odemeBtn.style.display        = isAdmin ? '' : 'none';
 
   // Karşılama mesajını kişiye göre güncelle
   const welcomeEl = document.getElementById('dashboardWelcome');

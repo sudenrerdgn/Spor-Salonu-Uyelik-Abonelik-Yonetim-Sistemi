@@ -666,7 +666,7 @@ Gemini
                         <h1>Abonelik Yönetimi 📋</h1>
                         <p>Planlar ve aktif abonelikler</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary"
+                    <div class="topbar-right"><button id="abonelikYeniPlanBtn" class="btn-primary"
                             onclick="showToast('Yeni plan oluşturma yakında!')"><i class="fas fa-plus"></i> Yeni
                             Plan</button></div>
                 </div>
@@ -705,6 +705,7 @@ Gemini
                         <div class="card-header">
                             <div class="card-title">Abonelik Planları</div>
                         </div>
+                        <div id="aktifAbonelikBanner" style="display:none;"></div>
                         <div id="abonelikPlanCards"></div>
                     </div>
                     <div class="glass-card">
@@ -716,7 +717,7 @@ Gemini
                 </div>
                 <div class="glass-card">
                     <div class="card-header">
-                        <div class="card-title">Aktif Abonelikler</div>
+                        <div class="card-title">Tüm Abonelikler</div>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -744,7 +745,7 @@ Gemini
                         <h1>Ödeme Yönetimi 💳</h1>
                         <p>Ödeme geçmişi ve istatistikler</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary" onclick="showToast('Ödeme alma yakında!')"><i
+                    <div class="topbar-right"><button id="odemeAlBtn" class="btn-primary" onclick="showToast('Ödeme alma yakında!')"><i
                                 class="fas fa-plus"></i> Ödeme Al</button></div>
                 </div>
 
