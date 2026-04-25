@@ -523,28 +523,72 @@ function showToast(msg) {
 // ═══════════════════════════════════════════
 // GRAFİK
 // ═══════════════════════════════════════════
+const ayAdlari = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
 const chartData = {
   gelir: {
-    labels: ['Eyl','Eki','Kas','Ara','Oca','Şub','Mar'],
-    data: [32000, 37000, 41000, 38000, 43000, 45000, 47200],
+    labels: ['Oca','Şub','Mar','Nis','May','Haz','Tem'],
+    data: [0, 0, 0, 0, 0, 0, 0],
     color1: 'rgba(139,92,246,0.8)', color2: 'rgba(0,212,255,0.2)',
     label: 'Aylık Gelir (₺)'
   },
   uye: {
-    labels: ['Eyl','Eki','Kas','Ara','Oca','Şub','Mar'],
-    data: [180, 195, 210, 205, 228, 238, 248],
+    labels: ['Oca','Şub','Mar','Nis','May','Haz','Tem'],
+    data: [0, 0, 0, 0, 0, 0, 0],
     color1: 'rgba(0,212,255,0.8)', color2: 'rgba(139,92,246,0.2)',
     label: 'Toplam Üye'
   },
   devamsiz: {
-    labels: ['Eyl','Eki','Kas','Ara','Oca','Şub','Mar'],
-    data: [8, 12, 9, 15, 11, 13, 12],
+    labels: ['Oca','Şub','Mar','Nis','May','Haz','Tem'],
+    data: [0, 0, 0, 0, 0, 0, 0],
     color1: 'rgba(244,114,182,0.8)', color2: 'rgba(251,146,60,0.2)',
     label: 'Devamsız Üye'
   }
 };
 
 let chart;
+let gelirDataLoaded = false;
+let uyeDataLoaded = false;
+let devamsizDataLoaded = false;
+
+function loadGelirChartData() {
+  if (gelirDataLoaded) return Promise.resolve();
+  return apiFetch('/api/aylik-gelir')
+    .then(data => {
+      if (data && data.aylar && data.aylar.length > 0) {
+        chartData.gelir.labels = data.aylar.map(a => ayAdlari[a.ay - 1] + ' ' + a.yil);
+        chartData.gelir.data = data.aylar.map(a => a.toplam);
+        gelirDataLoaded = true;
+      }
+    })
+    .catch(e => { if(e.message!=='AUTH_ERROR') console.log('Aylık gelir API yok'); });
+}
+
+function loadUyeChartData() {
+  if (uyeDataLoaded) return Promise.resolve();
+  return apiFetch('/api/aylik-uye')
+    .then(data => {
+      if (data && data.aylar && data.aylar.length > 0) {
+        chartData.uye.labels = data.aylar.map(a => ayAdlari[a.ay - 1] + ' ' + a.yil);
+        chartData.uye.data = data.aylar.map(a => a.toplam);
+        uyeDataLoaded = true;
+      }
+    })
+    .catch(e => { if(e.message!=='AUTH_ERROR') console.log('Aylık üye API yok'); });
+}
+
+function loadDevamsizChartData() {
+  if (devamsizDataLoaded) return Promise.resolve();
+  return apiFetch('/api/aylik-devamsiz')
+    .then(data => {
+      if (data && data.aylar && data.aylar.length > 0) {
+        chartData.devamsiz.labels = data.aylar.map(a => ayAdlari[a.ay - 1] + ' ' + a.yil);
+        chartData.devamsiz.data = data.aylar.map(a => a.toplam);
+        devamsizDataLoaded = true;
+      }
+    })
+    .catch(e => { if(e.message!=='AUTH_ERROR') console.log('Aylık devamsız API yok'); });
+}
 
 function getChartColors() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
@@ -560,43 +604,59 @@ function getChartColors() {
 }
 
 function initChart(type = 'gelir') {
-  const ctx = document.getElementById('mainChart').getContext('2d');
-  const d = chartData[type];
-  const cc = getChartColors();
-  const grad = ctx.createLinearGradient(0, 0, 0, 220);
-  grad.addColorStop(0, d.color1.replace('0.8','0.3'));
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: d.labels,
-      datasets: [{
-        label: d.label, data: d.data,
-        borderColor: d.color1, backgroundColor: grad,
-        borderWidth: 2.5, pointBackgroundColor: d.color1,
-        pointBorderColor: '#fff', pointBorderWidth: 2,
-        pointRadius: 5, pointHoverRadius: 7,
-        fill: true, tension: 0.45,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: cc.tooltipBg,
-          borderColor: cc.tooltipBorder, borderWidth: 1,
-          titleColor: cc.tooltipTitle, bodyColor: cc.tooltipBody,
-          padding: 12, cornerRadius: 10
-        }
+  const canvas = document.getElementById('mainChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const renderChart = () => {
+    const d = chartData[type];
+    const cc = getChartColors();
+    const grad = ctx.createLinearGradient(0, 0, 0, 220);
+    grad.addColorStop(0, d.color1.replace('0.8','0.3'));
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.labels,
+        datasets: [{
+          label: d.label, data: d.data,
+          borderColor: d.color1, backgroundColor: grad,
+          borderWidth: 2.5, pointBackgroundColor: d.color1,
+          pointBorderColor: '#fff', pointBorderWidth: 2,
+          pointRadius: 5, pointHoverRadius: 7,
+          fill: true, tension: 0.45,
+        }]
       },
-      scales: {
-        x: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 11 } }, border: { display: false } },
-        y: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 11 } }, border: { display: false } }
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: cc.tooltipBg,
+            borderColor: cc.tooltipBorder, borderWidth: 1,
+            titleColor: cc.tooltipTitle, bodyColor: cc.tooltipBody,
+            padding: 12, cornerRadius: 10
+          }
+        },
+        scales: {
+          x: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 11 } }, border: { display: false } },
+          y: { grid: { color: cc.grid }, ticks: { color: cc.tick, font: { size: 11 } }, border: { display: false } }
+        }
       }
-    }
-  });
+    });
+  };
+
+  // İlgili sekme seçiliyse önce API'den veri yükle
+  if (type === 'gelir' && !gelirDataLoaded) {
+    loadGelirChartData().then(renderChart);
+  } else if (type === 'uye' && !uyeDataLoaded) {
+    loadUyeChartData().then(renderChart);
+  } else if (type === 'devamsiz' && !devamsizDataLoaded) {
+    loadDevamsizChartData().then(renderChart);
+  } else {
+    renderChart();
+  }
 }
 
 function switchChart(type, el) {
@@ -668,7 +728,7 @@ function loadDashboardStats() {
       const sb  = document.getElementById('sidebarMemberCount');
       if (el1) el1.textContent = data.toplamUye;
       if (el2) el2.textContent = '₺' + Number(data.buAyGelir).toLocaleString('tr-TR');
-      if (el3) el3.textContent = data.aktifUye;
+      if (el3) el3.textContent = data.aktifAbonelik;
       if (el4) el4.textContent = data.suresiDolan;
       if (sb)  sb.textContent  = data.toplamUye;
       // Üyeler sayfası stat kartlarını da güncelle

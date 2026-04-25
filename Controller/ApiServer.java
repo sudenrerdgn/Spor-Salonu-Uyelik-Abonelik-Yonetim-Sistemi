@@ -90,6 +90,9 @@ public class ApiServer {
         server.createContext("/api/uye-guncelle",      new UyeGuncelleHandler());
         server.createContext("/api/uye-sil",           new UyeSilHandler());
         server.createContext("/api/istatistikler",     new IstatistiklerHandler());
+        server.createContext("/api/aylik-gelir",        new AylikGelirHandler());
+        server.createContext("/api/aylik-uye",          new AylikUyeHandler());
+        server.createContext("/api/aylik-devamsiz",     new AylikDevamsizHandler());
 
         // ── Admin | Üye (kendi verisi) ────────────────────────
         server.createContext("/api/odemeler",          new OdemelerHandler());
@@ -742,6 +745,11 @@ public class ApiServer {
             try {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 Statement stmt  = conn.createStatement();
+
+                // Önce süresi dolmuş aktif abonelikleri güncelle
+                stmt.executeUpdate(
+                    "UPDATE uye_abonelikleri SET durum = N'suresi_doldu' " +
+                    "WHERE durum = N'aktif' AND bitis_tarihi < CAST(GETDATE() AS DATE)");
 
                 ResultSet r1=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye'");
                 int toplamUye=r1.next()?r1.getInt("cnt"):0; r1.close();
@@ -1501,6 +1509,165 @@ public class ApiServer {
             } catch (Exception e) {
                 System.out.println("❌ Ödeme hatası: "+e.getMessage());
                 sendResponse(ex,500,errJson("Veritabanı hatası: "+e.getMessage().replace("\"","'"),"DB_ERROR"));
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // AYLIK GELİR — GET /api/aylik-gelir  [Admin]
+    // Son 12 ayın gelir verilerini odemeler tablosundan çeker
+    // ═══════════════════════════════════════════════════
+    static class AylikGelirHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+
+                // Son 12 ayın gelir verilerini getir (odemeler tablosundan)
+                ResultSet rs = stmt.executeQuery(
+                    "WITH Son12Ay AS (" +
+                    "  SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 " +
+                    "  UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 " +
+                    "  UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11" +
+                    ") " +
+                    "SELECT YEAR(DATEADD(MONTH, -n, GETDATE())) AS yil, " +
+                    "       MONTH(DATEADD(MONTH, -n, GETDATE())) AS ay, " +
+                    "       ISNULL((SELECT SUM(o.miktar) FROM odemeler o " +
+                    "         WHERE o.durum = N'tamamlandi' " +
+                    "           AND MONTH(o.odeme_tarihi) = MONTH(DATEADD(MONTH, -n, GETDATE())) " +
+                    "           AND YEAR(o.odeme_tarihi) = YEAR(DATEADD(MONTH, -n, GETDATE()))), 0) AS toplam " +
+                    "FROM Son12Ay " +
+                    "ORDER BY yil ASC, ay ASC");
+
+                StringBuilder json = new StringBuilder("{\"aylar\":[");
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append(String.format(
+                        "{\"yil\":%d,\"ay\":%d,\"toplam\":%.2f}",
+                        rs.getInt("yil"), rs.getInt("ay"), rs.getDouble("toplam")));
+                    first = false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+
+            } catch (SQLException e) {
+                sendResponse(ex, 500, "{\"hata\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // AYLIK ÜYE BÜYÜMESİ — GET /api/aylik-uye  [Admin]
+    // Son 12 ayın kümülatif üye sayısını çeker
+    // ═══════════════════════════════════════════════════
+    static class AylikUyeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+
+                // Son 12 ayın kümülatif üye verilerini getir
+                ResultSet rs = stmt.executeQuery(
+                    "WITH Son12Ay AS (" +
+                    "  SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 " +
+                    "  UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 " +
+                    "  UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11" +
+                    ") " +
+                    "SELECT YEAR(DATEADD(MONTH, -n, GETDATE())) AS yil, " +
+                    "       MONTH(DATEADD(MONTH, -n, GETDATE())) AS ay, " +
+                    "       (SELECT COUNT(*) FROM kullanicilar k " +
+                    "        JOIN roller r ON k.rol_id = r.role_id " +
+                    "        WHERE r.rol_adi = N'uye' " +
+                    "        AND k.kayit_tarihi < DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) - n + 1, 0)) AS toplam " +
+                    "FROM Son12Ay " +
+                    "ORDER BY yil ASC, ay ASC");
+
+                StringBuilder json = new StringBuilder("{\"aylar\":[");
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append(String.format(
+                        "{\"yil\":%d,\"ay\":%d,\"toplam\":%d}",
+                        rs.getInt("yil"), rs.getInt("ay"), rs.getInt("toplam")));
+                    first = false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+
+            } catch (SQLException e) {
+                sendResponse(ex, 500, "{\"hata\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // AYLIK DEVAMSIZ ÜYE — GET /api/aylik-devamsiz [Admin]
+    // Son 12 ayın devamsız üye sayısını çeker
+    // ═══════════════════════════════════════════════════
+    static class AylikDevamsizHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+
+                // Son 12 ayın devamsız üye verilerini getir
+                // Mantık: O ay içinde aboneliği aktif olan (başlangıç < ay sonu VE bitiş >= ay başı)
+                // ANCAK o ay içinde hiç giriş kaydı olmayan üyeler
+                ResultSet rs = stmt.executeQuery(
+                    "WITH Son12Ay AS (" +
+                    "  SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 " +
+                    "  UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 " +
+                    "  UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11" +
+                    "), " +
+                    "Aylar AS (" +
+                    "  SELECT YEAR(DATEADD(MONTH, -n, GETDATE())) AS yil, " +
+                    "         MONTH(DATEADD(MONTH, -n, GETDATE())) AS ay, " +
+                    "         DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) - n, 0) AS ay_basi, " +
+                    "         DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) - n + 1, 0) AS ay_sonu " +
+                    "  FROM Son12Ay" +
+                    ") " +
+                    "SELECT A.yil, A.ay, " +
+                    "  (SELECT COUNT(DISTINCT ua.uye_id) " +
+                    "   FROM uye_abonelikleri ua " +
+                    "   WHERE ua.baslangic_tarihi < A.ay_sonu AND ua.bitis_tarihi >= A.ay_basi " +
+                    "   AND ua.uye_id NOT IN (" +
+                    "       SELECT DISTINCT kullanici_id " +
+                    "       FROM giris_cikis_kayitlari gck " +
+                    "       WHERE gck.giris_saat >= A.ay_basi AND gck.giris_saat < A.ay_sonu" +
+                    "   )) AS toplam " +
+                    "FROM Aylar A " +
+                    "ORDER BY A.yil ASC, A.ay ASC");
+
+                StringBuilder json = new StringBuilder("{\"aylar\":[");
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append(String.format(
+                        "{\"yil\":%d,\"ay\":%d,\"toplam\":%d}",
+                        rs.getInt("yil"), rs.getInt("ay"), rs.getInt("toplam")));
+                    first = false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+
+            } catch (SQLException e) {
+                sendResponse(ex, 500, "{\"hata\":\"" + e.getMessage().replace("\"", "'") + "\"}");
             }
         }
     }

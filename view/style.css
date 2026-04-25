@@ -1765,3 +1765,14 @@
           grid-template-columns: 1fr 1fr;
       }
   }
+
+  /* KÜÇÜLEN EKRANLARDA OTOMATİK ÖLÇEKLEME (PROPORTIONAL SCALING) */
+  @media (max-width: 1440px) {
+      body {
+          min-width: 1440px;
+          zoom: calc(100vw / 1440);
+      }
+      html {
+          overflow-x: hidden;
+      }
+  }
