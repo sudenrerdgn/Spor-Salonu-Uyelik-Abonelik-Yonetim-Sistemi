@@ -249,7 +249,6 @@ function apiEditMember(id) {
   document.getElementById('editSoyad').value = m.soyad || '';
   document.getElementById('editEmail').value = m.email || '';
   document.getElementById('editTelefon').value = m.telefon || '';
-  document.getElementById('editCinsiyet').value = m.cinsiyet || '';
   document.getElementById('editDurum').value = m.durum || 'aktif';
   document.getElementById('editMemberModal').classList.add('open');
 }
@@ -1318,15 +1317,18 @@ const rezervasyonData = [
   { uye:'Emre Demir',    ders:'Yoga Flow',           tarih:'2026-03-14', saat:'08:00–09:00', durum:'aktif' },
 ];
 
+let derslerCachedData = [];
 function renderDerslerPage() {
-  fetch(API_URL + '/api/dersler').then(r => r.json()).then(data => {
+  apiFetch('/api/dersler').then(data => {
+    derslerCachedData = data.dersler;
     const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️', 'Yüzme':'🏊', 'Pilates':'🤸' };
     const dTb = document.getElementById('derslerTableBody');
     if (dTb) {
       dTb.innerHTML = '';
       data.dersler.forEach(d => {
         const icon = iconMap[d.kategori] || '📋';
-        dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot ${d.durum}">${d.durum === 'aktif' ? 'Aktif' : d.durum}</span></td></tr>`;
+        const actionBtn = `<div style="display:flex;gap:6px;justify-content:flex-end;"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="openEditClassModal(${d.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="openDeleteModal('ders',${d.id},'${d.ders}')"><i class="fas fa-trash" style="color:#f87171"></i></div></div>`;
+        dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot ${d.durum}">${d.durum === 'aktif' ? 'Aktif' : d.durum}</span></td><td style="text-align:right;">${actionBtn}</td></tr>`;
       });
     }
     const pTb = document.getElementById('programTableBody');
@@ -1382,10 +1384,12 @@ function renderDerslerPage() {
 // ═══════════════════════════════════════════
 // ANTRENÖRLER SAYFASI
 // ═══════════════════════════════════════════
+let antrenorlerCachedData = [];
 function renderAntrenorlerPage() {
   const container = document.getElementById('antrenorProfileCards');
   if (!container) return;
-  fetch(API_URL + '/api/antrenorler-detay').then(r => r.json()).then(trainers => {
+  apiFetch('/api/antrenorler-detay').then(trainers => {
+    antrenorlerCachedData = trainers;
     container.innerHTML = '';
     trainers.forEach((t, idx) => {
       const color = avatarColors[idx % avatarColors.length];
@@ -1405,7 +1409,11 @@ function renderAntrenorlerPage() {
             <div class="trainer-stat"><div class="trainer-stat-value">—</div><div class="trainer-stat-label">Öğrenci</div></div>
           </div>
           <div style="margin-bottom:10px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Sertifikalar</div><div class="trainer-certs">${certs || '—'}</div></div>
-          <div class="trainer-bio">${t.biyografi || ''}</div>
+          <div class="trainer-bio" style="margin-bottom:10px;">${t.biyografi || ''}</div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;border-top:1px solid rgba(255,255,255,0.05);padding-top:10px;">
+                        <div class="icon-btn" style="width:32px;height:32px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);" onclick="openEditTrainerModal(${t.id})" title="Düzenle"><i class="fas fa-pen" style="font-size:12px;"></i></div>
+                        <div class="icon-btn" style="width:32px;height:32px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:rgba(239,68,68,0.1);" onclick="openDeleteModal('antrenor',${t.id},'${t.isim}')" title="Sil"><i class="fas fa-trash" style="color:#f87171;font-size:12px;"></i></div>
+          </div>
         </div>`;
     });
   }).catch(() => {
@@ -1457,7 +1465,7 @@ function renderGirisCikisTable(data) {
 
 let girisCikisCachedData = [];
 function renderGirisCikisPage() {
-  fetch(API_URL + '/api/giris-cikis').then(r => r.json()).then(data => {
+  apiFetch('/api/giris-cikis').then(data => {
     girisCikisCachedData = data.map(l => ({ uye:l.uye, giris:l.giris, cikis:l.cikis, turu:l.turu, durum:l.durum }));
     renderGirisCikisTable(girisCikisCachedData);
   }).catch(() => { girisCikisCachedData = girisCikisData; renderGirisCikisTable(girisCikisData); });
@@ -1498,14 +1506,15 @@ function renderEkipmanTable(data) {
       <td style="color:var(--text-muted);font-size:12px">${e.adet}</td>
       <td style="color:var(--text-muted);font-size:12px">${e.satinAlma}</td>
       <td style="font-family:'Clash Display',sans-serif;font-weight:700;color:var(--text-muted)">₺${e.fiyat.toLocaleString('tr-TR')}</td>
-      <td><span style="font-size:11px;background:${d.color}20;color:${d.color};padding:4px 10px;border-radius:20px;font-weight:600;">${d.text}</span></td></tr>`;
+      <td><span style="font-size:11px;background:${d.color}20;color:${d.color};padding:4px 10px;border-radius:20px;font-weight:600;">${d.text}</span></td>
+      <td style="text-align:right;"><div style="display:flex;gap:6px;justify-content:flex-end;"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="openEditEquipmentModal(${e.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="openDeleteModal('ekipman',${e.id},'${e.ad}')"><i class="fas fa-trash" style="color:#f87171"></i></div></div></td></tr>`;
   });
 }
 
 let ekipmanCachedData = [];
 function renderEkipmanPage() {
-  fetch(API_URL + '/api/ekipman').then(r => r.json()).then(data => {
-    ekipmanCachedData = data.ekipman.map(e => ({ ad:e.ad, kategori:e.kategori, adet:e.adet, satinAlma:e.satinAlma, fiyat:e.fiyat, durum:e.durum }));
+  apiFetch('/api/ekipman').then(data => {
+    ekipmanCachedData = data.ekipman.map(e => ({ id:e.id, ad:e.ad, kategori:e.kategori, adet:e.adet, satinAlma:e.satinAlma, fiyat:e.fiyat, durum:e.durum }));
     renderEkipmanTable(ekipmanCachedData);
     const bTb = document.getElementById('bakimTableBody');
     if (!bTb) return;
@@ -2220,4 +2229,268 @@ function renderAntrenorKatilimChart() {
       }
     }
   });
+}
+
+// ═══════════════════════════════════════════
+// YENİ EKLE BUTONLARI VE MODALLARI (Antrenör, Ekipman, Ders)
+// ═══════════════════════════════════════════
+
+// --- ANTRENÖR EKLE ---
+function showAddTrainerModal() {
+  document.getElementById('addTrainerAd').value = '';
+  document.getElementById('addTrainerSoyad').value = '';
+  document.getElementById('addTrainerEmail').value = '';
+  document.getElementById('addTrainerTelefon').value = '';
+  document.getElementById('addTrainerUzmanlik').value = '';
+  document.getElementById('addTrainerDeneyim').value = '';
+  document.getElementById('addTrainerSertifikalar').value = '';
+  document.getElementById('addTrainerModal').classList.add('open');
+}
+function closeAddTrainerModal() {
+  document.getElementById('addTrainerModal').classList.remove('open');
+}
+function submitAddTrainer() {
+  const ad = document.getElementById('addTrainerAd').value.trim();
+  const soyad = document.getElementById('addTrainerSoyad').value.trim();
+  const email = document.getElementById('addTrainerEmail').value.trim();
+  const telefon = document.getElementById('addTrainerTelefon').value.trim();
+  const uzmanlik = document.getElementById('addTrainerUzmanlik').value.trim();
+  const deneyim = document.getElementById('addTrainerDeneyim').value.trim();
+  const sertifikalar = document.getElementById('addTrainerSertifikalar').value.trim();
+
+  if (!ad || !soyad || !email) { showToast('Ad, Soyad ve E-posta zorunlu!'); return; }
+
+  closeAddTrainerModal();
+  apiFetch('/api/antrenor-ekle', {
+    method: 'POST',
+    body: JSON.stringify({ ad, soyad, email, telefon, uzmanlik, deneyim, sertifikalar })
+  }).then(data => {
+    showToast(data.mesaj);
+    if(data.basarili) renderAntrenorlerPage();
+  }).catch(() => showToast('Sunucu hatası!'));
+}
+
+// --- EKİPMAN EKLE ---
+function showAddEquipmentModal() {
+  document.getElementById('addEquipAd').value = '';
+  document.getElementById('addEquipKategori').value = 'Kardio';
+  document.getElementById('addEquipAdet').value = '1';
+  document.getElementById('addEquipFiyat').value = '';
+  document.getElementById('addEquipTarih').value = new Date().toISOString().split('T')[0];
+  document.getElementById('addEquipmentModal').classList.add('open');
+}
+function closeAddEquipmentModal() {
+  document.getElementById('addEquipmentModal').classList.remove('open');
+}
+function submitAddEquipment() {
+  const ad = document.getElementById('addEquipAd').value.trim();
+  const kategori = document.getElementById('addEquipKategori').value;
+  const adet = document.getElementById('addEquipAdet').value || '1';
+  const fiyat = document.getElementById('addEquipFiyat').value || '0';
+  const satinAlma = document.getElementById('addEquipTarih').value;
+
+  if (!ad) { showToast('Ekipman adı zorunlu!'); return; }
+
+  closeAddEquipmentModal();
+  apiFetch('/api/ekipman-ekle', {
+    method: 'POST',
+    body: JSON.stringify({ ad, kategori, adet, fiyat, satinAlma })
+  }).then(data => {
+    showToast(data.mesaj);
+    if(data.basarili) renderEkipmanPage();
+  }).catch(() => showToast('Sunucu hatası!'));
+}
+
+// --- DERS EKLE ---
+function showAddClassModal() {
+  document.getElementById('addClassAd').value = '';
+  document.getElementById('addClassAntrenor').innerHTML = '<option value="">Yükleniyor...</option>';
+  document.getElementById('addClassKategori').value = 'Kardio';
+  document.getElementById('addClassKontenjan').value = '20';
+  document.getElementById('addClassSure').value = '60';
+  
+  apiFetch('/api/antrenorler-detay')
+    .then(data => {
+      const select = document.getElementById('addClassAntrenor');
+      select.innerHTML = '<option value="">Seçiniz</option>';
+      data.forEach(t => {
+        if(t.durum === 'aktif') {
+          select.innerHTML += `<option value="${t.id}">${t.isim}</option>`;
+        }
+      });
+    })
+    .catch(() => {
+      document.getElementById('addClassAntrenor').innerHTML = '<option value="">Antrenörler yüklenemedi</option>';
+    });
+
+  document.getElementById('addClassModal').classList.add('open');
+}
+function closeAddClassModal() {
+  document.getElementById('addClassModal').classList.remove('open');
+}
+function submitAddClass() {
+  const dersAd = document.getElementById('addClassAd').value.trim();
+  const antrenorId = document.getElementById('addClassAntrenor').value.trim();
+  const kategori = document.getElementById('addClassKategori').value;
+  const kontenjan = document.getElementById('addClassKontenjan').value || '20';
+  const sure = document.getElementById('addClassSure').value || '60';
+
+  if (!dersAd || !antrenorId) { showToast('Ders adı ve Antrenör ID zorunlu!'); return; }
+
+  closeAddClassModal();
+  apiFetch('/api/ders-ekle', {
+    method: 'POST',
+    body: JSON.stringify({ dersAd, antrenorId, kategori, kontenjan, sure })
+  }).then(data => {
+    showToast(data.mesaj);
+    if(data.basarili) renderDerslerPage();
+  }).catch(() => showToast('Sunucu hatası!'));
+}
+
+// ═══════════════════════════════════════════
+// DÜZENLE VE SİL İŞLEMLERİ
+// ═══════════════════════════════════════════
+
+// --- GENEL SİLME MODALI ---
+function openDeleteModal(type, id, name) {
+  document.getElementById('deleteTargetType').value = type;
+  document.getElementById('deleteTargetId').value = id;
+  document.getElementById('deleteConfirmItemName').textContent = name;
+  document.getElementById('universalDeleteModal').classList.add('open');
+}
+function closeUniversalDeleteModal() { document.getElementById('universalDeleteModal').classList.remove('open'); }
+function submitUniversalDelete() {
+  const type = document.getElementById('deleteTargetType').value;
+  const id = document.getElementById('deleteTargetId').value;
+  let endpoint = '';
+  let refreshFn = null;
+
+  if (type === 'ders') { endpoint = '/api/ders-sil'; refreshFn = renderDerslerPage; }
+  else if (type === 'antrenor') { endpoint = '/api/antrenor-sil'; refreshFn = renderAntrenorlerPage; }
+  else if (type === 'ekipman') { endpoint = '/api/ekipman-sil'; refreshFn = renderEkipmanPage; }
+
+  closeUniversalDeleteModal();
+  apiFetch(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({ id: id })
+  }).then(data => {
+    showToast(data.mesaj);
+    if(data.basarili && refreshFn) refreshFn();
+  }).catch(() => showToast('Sunucu hatası!'));
+}
+
+// --- DERS DÜZENLE ---
+function openEditClassModal(id) {
+  const d = derslerCachedData.find(x => x.id === id);
+  if(!d) return;
+
+  document.getElementById('editClassId').value = d.id;
+  document.getElementById('editClassAd').value = d.ders;
+  // Antrenor options doldur
+  document.getElementById('editClassAntrenor').innerHTML = '<option value="">Yükleniyor...</option>';
+  apiFetch('/api/antrenorler-detay').then(data => {
+    const sel = document.getElementById('editClassAntrenor');
+    sel.innerHTML = '<option value="">Seçiniz</option>';
+    data.forEach(t => {
+      // isActive check might omit if trainer is pasif, but for editing existing we might still show them if they match.
+      // Easiest is to add them all and select the one matching
+      const selected = (t.isim === d.antrenor) ? 'selected' : '';
+      sel.innerHTML += `<option value="${t.id}" ${selected}>${t.isim}</option>`;
+    });
+  });
+
+  document.getElementById('editClassKategori').value = d.kategori || 'Kardio';
+  document.getElementById('editClassKontenjan').value = d.kontenjan;
+  document.getElementById('editClassSure').value = d.sure;
+  document.getElementById('editClassDurum').value = (d.durum || '').toLowerCase() === 'aktif' ? 'aktif' : 'pasif';
+  
+  document.getElementById('editClassModal').classList.add('open');
+}
+function closeEditClassModal() { document.getElementById('editClassModal').classList.remove('open'); }
+function submitEditClass() {
+  const id = document.getElementById('editClassId').value;
+  const dersAd = document.getElementById('editClassAd').value.trim();
+  const antrenorId = document.getElementById('editClassAntrenor').value;
+  const kategori = document.getElementById('editClassKategori').value;
+  const kontenjan = document.getElementById('editClassKontenjan').value;
+  const sure = document.getElementById('editClassSure').value;
+  const durum = document.getElementById('editClassDurum').value;
+
+  if(!dersAd || !antrenorId) { showToast('Eksik alanlar!'); return; }
+
+  closeEditClassModal();
+  apiFetch('/api/ders-guncelle', {
+    method: 'POST',
+    body: JSON.stringify({ id, dersAd, antrenorId, kategori, kontenjan, sure, durum })
+  }).then(res => {
+    showToast(res.mesaj);
+    if(res.basarili) renderDerslerPage();
+  }).catch(()=>showToast('Hata!'));
+}
+
+// --- EKİPMAN DÜZENLE ---
+function openEditEquipmentModal(id) {
+  const e = ekipmanCachedData.find(x => x.id === id);
+  if(!e) return;
+  document.getElementById('editEquipId').value = e.id;
+  document.getElementById('editEquipAd').value = e.ad;
+  document.getElementById('editEquipKategori').value = e.kategori || 'Kardio';
+  document.getElementById('editEquipAdet').value = e.adet;
+  document.getElementById('editEquipFiyat').value = e.fiyat;
+  document.getElementById('editEquipDurum').value = e.durum || 'calisiyor';
+  document.getElementById('editEquipmentModal').classList.add('open');
+}
+function closeEditEquipmentModal() { document.getElementById('editEquipmentModal').classList.remove('open'); }
+function submitEditEquipment() {
+  const id = document.getElementById('editEquipId').value;
+  const ad = document.getElementById('editEquipAd').value.trim();
+  const kategori = document.getElementById('editEquipKategori').value;
+  const adet = document.getElementById('editEquipAdet').value;
+  const fiyat = document.getElementById('editEquipFiyat').value;
+  const durum = document.getElementById('editEquipDurum').value;
+  
+  if(!ad) { showToast('Ekipman adı gerekli!'); return; }
+  
+  closeEditEquipmentModal();
+  apiFetch('/api/ekipman-guncelle', {
+    method:'POST', body: JSON.stringify({ id, ad, kategori, adet, fiyat, durum })
+  }).then(res=>{ showToast(res.mesaj); if(res.basarili) renderEkipmanPage(); });
+}
+
+// --- ANTRENÖR DÜZENLE ---
+function openEditTrainerModal(id) {
+  const t = antrenorlerCachedData.find(x => x.id === id);
+  if(!t) return;
+  document.getElementById('editTrainerId').value = t.id;
+  // The API returns 'isim' (Ad Soyad space separated). We try to split roughly
+  const parts = t.isim.split(' ');
+  document.getElementById('editTrainerSoyad').value = parts.length > 1 ? parts.pop() : '';
+  document.getElementById('editTrainerAd').value = parts.join(' ');
+  document.getElementById('editTrainerEmail').value = t.email || '';
+  document.getElementById('editTrainerTelefon').value = t.telefon || '';
+  document.getElementById('editTrainerUzmanlik').value = t.uzmanlik || '';
+  document.getElementById('editTrainerDeneyim').value = t.deneyim || 0;
+  document.getElementById('editTrainerSertifikalar').value = t.sertifikalar || '';
+  document.getElementById('editTrainerDurum').value = (t.durum||'aktif').toLowerCase();
+
+  document.getElementById('editTrainerModal').classList.add('open');
+}
+function closeEditTrainerModal() { document.getElementById('editTrainerModal').classList.remove('open'); }
+function submitEditTrainer() {
+  const id = document.getElementById('editTrainerId').value;
+  const ad = document.getElementById('editTrainerAd').value.trim();
+  const soyad = document.getElementById('editTrainerSoyad').value.trim();
+  const email = document.getElementById('editTrainerEmail').value.trim();
+  const telefon = document.getElementById('editTrainerTelefon').value.trim();
+  const uzmanlik = document.getElementById('editTrainerUzmanlik').value.trim();
+  const deneyim = document.getElementById('editTrainerDeneyim').value;
+  const sertifikalar = document.getElementById('editTrainerSertifikalar').value.trim();
+  const durum = document.getElementById('editTrainerDurum').value;
+
+  if(!ad || !soyad || !email) { showToast('Ad, Soyad, ve Email gerekli!'); return; }
+
+  closeEditTrainerModal();
+  apiFetch('/api/antrenor-guncelle', {
+    method:'POST', body: JSON.stringify({ id, ad, soyad, email, telefon, uzmanlik, deneyim, sertifikalar, durum })
+  }).then(res=>{ showToast(res.mesaj); if(res.basarili) renderAntrenorlerPage(); });
 }

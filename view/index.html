@@ -837,7 +837,7 @@ Gemini
                         <p>Dersler, programlar ve rezervasyonlar</p>
                     </div>
                     <div class="topbar-right"><button class="btn-primary"
-                            onclick="showToast('Ders oluşturma yakında!')"><i class="fas fa-plus"></i> Yeni
+                            onclick="showAddClassModal()"><i class="fas fa-plus"></i> Yeni
                             Ders</button></div>
                 </div>
                 <div class="stats-grid">
@@ -884,6 +884,7 @@ Gemini
                                     <th>KONTENJAN</th>
                                     <th>SÜRE</th>
                                     <th>DURUM</th>
+                                    <th style="width:100px;text-align:right;">İŞLEMLER</th>
                                 </tr>
                             </thead>
                             <tbody id="derslerTableBody"></tbody>
@@ -938,7 +939,7 @@ Gemini
                         <p>Antrenör profilleri ve ders atamaları</p>
                     </div>
                     <div class="topbar-right"><button class="btn-primary"
-                            onclick="showToast('Antrenör ekleme yakında!')"><i class="fas fa-plus"></i> Yeni
+                            onclick="showAddTrainerModal()"><i class="fas fa-plus"></i> Yeni
                             Antrenör</button></div>
                 </div>
                 <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
@@ -1044,7 +1045,7 @@ Gemini
                         <p>Ekipman envanteri ve bakım takibi</p>
                     </div>
                     <div class="topbar-right"><button class="btn-primary"
-                            onclick="showToast('Ekipman ekleme yakında!')"><i class="fas fa-plus"></i> Yeni
+                            onclick="showAddEquipmentModal()"><i class="fas fa-plus"></i> Yeni
                             Ekipman</button></div>
                 </div>
                 <div class="stats-grid">
@@ -1098,6 +1099,7 @@ Gemini
                                     <th>SATIN ALMA</th>
                                     <th>FİYAT</th>
                                     <th>DURUM</th>
+                                    <th style="width:100px;text-align:right;">İŞLEMLER</th>
                                 </tr>
                             </thead>
                             <tbody id="ekipmanTableBody"></tbody>
@@ -1557,10 +1559,234 @@ Gemini
         </div>
     </div>
 
+    <!-- ─── EDIT MEMBER MODAL ─── -->
+    <div class="modal-overlay" id="editMemberModal" onclick="if(event.target===this)closeEditModal()">
+        <div class="modal" style="width:480px;">
+            <h2><i class="fas fa-user-pen" style="color:var(--accent-cyan);margin-right:8px;"></i>Üye Düzenle</h2>
+            <input type="hidden" id="editId">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-field"><label>Ad</label><input type="text" id="editAd" placeholder="Ad"></div>
+                <div class="form-field"><label>Soyad</label><input type="text" id="editSoyad" placeholder="Soyad"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>E-posta</label><input type="email" id="editEmail" placeholder="ornek@mail.com"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Telefon</label><input type="text" id="editTelefon" placeholder="05xx..."></div>
+            <div class="form-field" style="margin-top:12px;"><label>Durum</label>
+                <select id="editDurum">
+                    <option value="aktif">Aktif</option>
+                    <option value="pasif">Pasif</option>
+                    <option value="askida">Askıda</option>
+                </select>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeEditModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitEditMember()"><i class="fas fa-save"></i> Güncelle</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DELETE MEMBER MODAL ─── -->
+    <div class="modal-overlay" id="deleteMemberModal" onclick="if(event.target===this)closeDeleteModal()">
+        <div class="modal" style="width:420px;">
+            <h2><i class="fas fa-trash" style="color:#f87171;margin-right:8px;"></i>Üye Sil</h2>
+            <input type="hidden" id="deleteId">
+            <p><strong id="deleteConfirmName"></strong> adlı üyeyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeDeleteModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" style="background:#ef4444;" onclick="submitDeleteMember()"><i class="fas fa-trash"></i> Sil</button>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- ─── YENI ANTRENÖR MODAL ─── -->
+    <div class="modal-overlay" id="addTrainerModal" onclick="if(event.target===this)closeAddTrainerModal()">
+        <div class="modal" style="width:480px;">
+            <h2>Yeni Antrenör Ekle</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-field"><label>Ad</label><input type="text" id="addTrainerAd" placeholder="Ad"></div>
+                <div class="form-field"><label>Soyad</label><input type="text" id="addTrainerSoyad" placeholder="Soyad"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>E-posta</label><input type="email" id="addTrainerEmail" placeholder="ornek@mail.com"></div>
+                <div class="form-field"><label>Telefon</label><input type="text" id="addTrainerTelefon" placeholder="05xx..."></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input type="text" id="addTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="addTrainerDeneyim" placeholder="Yıl" min="0"></div>
+                <div class="form-field"><label>Sertifikalar</label><input type="text" id="addTrainerSertifikalar" placeholder="Sertifikalar"></div>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeAddTrainerModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitAddTrainer()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── YENI EKİPMAN MODAL ─── -->
+    <div class="modal-overlay" id="addEquipmentModal" onclick="if(event.target===this)closeAddEquipmentModal()">
+        <div class="modal" style="width:420px;">
+            <h2>Yeni Ekipman Ekle</h2>
+            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="addEquipAd" placeholder="Ekipman Adı"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
+                <select id="addEquipKategori">
+                    <option value="Kardio">Kardio</option>
+                    <option value="Güç">Güç</option>
+                    <option value="Esneklik">Esneklik</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Adet</label><input type="number" id="addEquipAdet" placeholder="1" min="1" value="1"></div>
+                <div class="form-field"><label>Fiyat (₺)</label><input type="number" id="addEquipFiyat" placeholder="0" min="0"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Satın Alma Tarihi</label><input type="date" id="addEquipTarih"></div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeAddEquipmentModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitAddEquipment()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── YENI DERS MODAL ─── -->
+    <div class="modal-overlay" id="addClassModal" onclick="if(event.target===this)closeAddClassModal()">
+        <div class="modal" style="width:420px;">
+            <h2>Yeni Ders Ekle</h2>
+            <div class="form-field"><label>Ders Adı</label><input type="text" id="addClassAd" placeholder="Ders Adı"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="addClassAntrenor"><option value="">Seçiniz</option></select></div>
+            <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
+                <select id="addClassKategori">
+                    <option value="Kardio">Kardio</option>
+                    <option value="Güç">Güç</option>
+                    <option value="Esneklik">Esneklik</option>
+                    <option value="Yüzme">Yüzme</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Kontenjan</label><input type="number" id="addClassKontenjan" placeholder="20" min="1" value="20"></div>
+                <div class="form-field"><label>Süre (dk)</label><input type="number" id="addClassSure" placeholder="60" min="15" value="60"></div>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeAddClassModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitAddClass()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── GENEL SİLME ONAY MODALI ─── -->
+    <div class="modal-overlay" id="universalDeleteModal" onclick="if(event.target===this)closeUniversalDeleteModal()">
+        <div class="modal" style="width:400px;text-align:center;">
+            <div style="width:60px;height:60px;background:rgba(239,68,68,0.1);color:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 20px;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h2>Silme Onayı</h2>
+            <p><strong id="deleteConfirmItemName"></strong> öğesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <input type="hidden" id="deleteTargetType">
+            <input type="hidden" id="deleteTargetId">
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeUniversalDeleteModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" style="background:#ef4444;" onclick="submitUniversalDelete()"><i class="fas fa-trash"></i> Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DÜZENLE DERS MODAL ─── -->
+    <div class="modal-overlay" id="editClassModal" onclick="if(event.target===this)closeEditClassModal()">
+        <div class="modal" style="width:420px;">
+            <h2>Ders Düzenle</h2>
+            <input type="hidden" id="editClassId">
+            <div class="form-field"><label>Ders Adı</label><input type="text" id="editClassAd" placeholder="Ders Adı"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="editClassAntrenor"><option value="">Seçiniz</option></select></div>
+            <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
+                <select id="editClassKategori">
+                    <option value="Kardio">Kardio</option>
+                    <option value="Güç">Güç</option>
+                    <option value="Esneklik">Esneklik</option>
+                    <option value="Yüzme">Yüzme</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Kontenjan</label><input type="number" id="editClassKontenjan" min="1"></div>
+                <div class="form-field"><label>Süre (dk)</label><input type="number" id="editClassSure" min="15"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Durum</label>
+                <select id="editClassDurum">
+                    <option value="aktif">Aktif</option>
+                    <option value="pasif">Pasif</option>
+                </select>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeEditClassModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitEditClass()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DÜZENLE EKİPMAN MODAL ─── -->
+    <div class="modal-overlay" id="editEquipmentModal" onclick="if(event.target===this)closeEditEquipmentModal()">
+        <div class="modal" style="width:420px;">
+            <h2>Ekipman Düzenle</h2>
+            <input type="hidden" id="editEquipId">
+            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="editEquipAd" placeholder="Ekipman Adı"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
+                <select id="editEquipKategori">
+                    <option value="Kardio">Kardio</option>
+                    <option value="Güç">Güç</option>
+                    <option value="Esneklik">Esneklik</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Adet</label><input type="number" id="editEquipAdet" min="1"></div>
+                <div class="form-field"><label>Fiyat (₺)</label><input type="number" id="editEquipFiyat" min="0"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Durum</label>
+                <select id="editEquipDurum">
+                    <option value="calisiyor">Çalışıyor</option>
+                    <option value="bakimda">Bakımda</option>
+                    <option value="arizali">Arızalı</option>
+                </select>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeEditEquipmentModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitEditEquipment()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DÜZENLE ANTRENÖR MODAL ─── -->
+    <div class="modal-overlay" id="editTrainerModal" onclick="if(event.target===this)closeEditTrainerModal()">
+        <div class="modal" style="width:480px;">
+            <h2>Antrenör Düzenle</h2>
+            <input type="hidden" id="editTrainerId">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-field"><label>Ad</label><input type="text" id="editTrainerAd" placeholder="Ad"></div>
+                <div class="form-field"><label>Soyad</label><input type="text" id="editTrainerSoyad" placeholder="Soyad"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>E-posta</label><input type="email" id="editTrainerEmail" placeholder="ornek@mail.com"></div>
+                <div class="form-field"><label>Telefon</label><input type="text" id="editTrainerTelefon" placeholder="05xx..."></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input type="text" id="editTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="editTrainerDeneyim" placeholder="Yıl" min="0"></div>
+                <div class="form-field"><label>Sertifikalar</label><input type="text" id="editTrainerSertifikalar" placeholder="Sertifikalar"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Durum</label>
+                <select id="editTrainerDurum">
+                    <option value="aktif">Aktif</option>
+                    <option value="pasif">Pasif</option>
+                </select>
+            </div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeEditTrainerModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-primary" onclick="submitEditTrainer()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">İşlem başarılı!</span></div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=6"></script>
     <script>document.addEventListener('DOMContentLoaded', async () => { await initApp(); });</script>
 </body>
 

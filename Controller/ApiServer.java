@@ -109,6 +109,18 @@ public class ApiServer {
         server.createContext("/api/giris-cikis",       new GirisCikisHandler());
         server.createContext("/api/ekipman",           new EkipmanHandler());
 
+        // ── Yeni Ekleme İşlemleri (Admin) ──────────────────────
+        server.createContext("/api/antrenor-ekle",     new AntrenorEkleHandler());
+        server.createContext("/api/ekipman-ekle",      new EkipmanEkleHandler());
+        server.createContext("/api/ders-ekle",         new DersEkleHandler());
+        
+        // ─── Düzenle ve Sil İşlemleri (Admin) ───
+        server.createContext("/api/ders-guncelle",     new DersGuncelleHandler());
+        server.createContext("/api/ders-sil",          new DersSilHandler());
+        server.createContext("/api/antrenor-guncelle", new AntrenorGuncelleHandler());
+        server.createContext("/api/antrenor-sil",      new AntrenorSilHandler());
+        server.createContext("/api/ekipman-guncelle",  new EkipmanGuncelleHandler());
+        server.createContext("/api/ekipman-sil",       new EkipmanSilHandler());
         // ── Static dosyalar ───────────────────────────────────
         server.createContext("/",                      new StaticFileHandler());
 
@@ -1719,6 +1731,331 @@ public class ApiServer {
             } catch (Exception e) {
                 System.out.println("❌ E-posta gönderim hatası (Gmail bağlanamadı veya yetki yok): " + e.getMessage());
             }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // YENİ EKLEME İŞLEMLERİ (Antrenör, Ekipman, Ders)
+    // ══════════════════════════════════════════════════════════════════════
+
+    static class AntrenorEkleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+
+            String body = readBody(ex);
+            String ad      = jsonValue(body,"ad");
+            String soyad   = jsonValue(body,"soyad");
+            String email   = jsonValue(body,"email");
+            String telefon = jsonValue(body,"telefon");
+            String uzmanlik= jsonValue(body,"uzmanlik");
+            String deneyim = jsonValue(body,"deneyim");
+            String sertif  = jsonValue(body,"sertifikalar");
+
+            if (ad==null || soyad==null || email==null) {
+                sendResponse(ex,400,errJson("Eksik alanlar!","BAD_REQUEST")); return;
+            }
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                
+                // 1) Kullanicilar tablosuna ekle (rol_id = 3 -> antrenör)
+                // Şifre: e-posta ve 123 birleşimi gibi geçici bir şifre
+                String tempSifre = "123456"; 
+                String sifreHash = hashPassword(tempSifre);
+                
+                String q1 = "INSERT INTO kullanicilar (ad, soyad, email, sifre_hash, telefon, rol_id, durum) VALUES (?,?,?,?,?,3,'aktif')";
+                PreparedStatement ps1 = conn.prepareStatement(q1, Statement.RETURN_GENERATED_KEYS);
+                ps1.setString(1, ad);
+                ps1.setString(2, soyad);
+                ps1.setString(3, email.toLowerCase());
+                ps1.setString(4, sifreHash);
+                ps1.setString(5, telefon != null ? telefon : "");
+                ps1.executeUpdate();
+                
+                ResultSet rs = ps1.getGeneratedKeys();
+                int newUserId = -1;
+                if (rs.next()) { newUserId = rs.getInt(1); }
+                ps1.close();
+                
+                if (newUserId != -1) {
+                    // 2) Antrenorler tablosuna uzmanlık bilgilerini ekle
+                    String q2 = "INSERT INTO antrenorler (kullanici_id, uzmanlik, deneyim_yili, sertifikalar) VALUES (?,?,?,?)";
+                    PreparedStatement ps2 = conn.prepareStatement(q2);
+                    ps2.setInt(1, newUserId);
+                    ps2.setString(2, uzmanlik != null ? uzmanlik : "");
+                    ps2.setInt(3, (deneyim != null && !deneyim.isEmpty()) ? Integer.parseInt(deneyim) : 0);
+                    ps2.setString(4, sertif != null ? sertif : "");
+                    ps2.executeUpdate();
+                    ps2.close();
+                    
+                    sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Antrenör eklendi!\"}");
+                } else {
+                    sendResponse(ex, 500, errJson("Kullanıcı ID alınamadı", "DB_ERROR"));
+                }
+            } catch (SQLException e) {
+                System.out.println("❌ Antrenör Ekleme hatası: " + e.getMessage());
+                if(e.getMessage().contains("UNIQUE")) {
+                    sendResponse(ex,409,errJson("Bu e-posta zaten kayıtlı!","CONFLICT"));
+                } else {
+                    sendResponse(ex,500,errJson("Veritabanı hatası","DB_ERROR"));
+                }
+            }
+        }
+    }
+
+    static class EkipmanEkleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+
+            String body = readBody(ex);
+            String ad        = jsonValue(body,"ad");
+            String kategori  = jsonValue(body,"kategori");
+            String adet      = jsonValue(body,"adet");
+            String fiyat     = jsonValue(body,"fiyat");
+            String satinAlma = jsonValue(body,"satinAlma");
+
+            if (ad==null) {
+                sendResponse(ex,400,errJson("Ekipman adı zorunlu!","BAD_REQUEST")); return;
+            }
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                String q = "INSERT INTO ekipman (ekipman_adi, kategori, miktar, satin_alma_fiyati, satin_alma_tarihi, durum) VALUES (?,?,?,?,?, 'calisiyor')";
+                PreparedStatement ps = conn.prepareStatement(q);
+                ps.setString(1, ad);
+                ps.setString(2, kategori != null ? kategori : "Diğer");
+                ps.setInt(3, (adet != null && !adet.isEmpty()) ? Integer.parseInt(adet) : 1);
+                ps.setDouble(4, (fiyat != null && !fiyat.isEmpty()) ? Double.parseDouble(fiyat) : 0.0);
+                
+                if (satinAlma != null && !satinAlma.isEmpty()) {
+                    ps.setDate(5, java.sql.Date.valueOf(satinAlma));
+                } else {
+                    ps.setNull(5, java.sql.Types.DATE);
+                }
+                
+                ps.executeUpdate();
+                ps.close();
+                
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ekipman başarıyla eklendi!\"}");
+            } catch (SQLException e) {
+                System.out.println("❌ Ekipman Ekleme hatası: " + e.getMessage());
+                sendResponse(ex,500,errJson("Veritabanı hatası","DB_ERROR"));
+            }
+        }
+    }
+
+    static class DersEkleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) { sendResponse(ex,405,errJson("Sadece POST","METHOD_NOT_ALLOWED")); return; }
+
+            String body = readBody(ex);
+            String dersAd     = jsonValue(body,"dersAd");
+            String antrenorId = jsonValue(body,"antrenorId");
+            String kategori   = jsonValue(body,"kategori");
+            String kontenjan  = jsonValue(body,"kontenjan");
+            String sure       = jsonValue(body,"sure");
+
+            if (dersAd==null || antrenorId==null) {
+                sendResponse(ex,400,errJson("Eksik alanlar!","BAD_REQUEST")); return;
+            }
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                String q = "INSERT INTO siniflar (ders_adi, antrenor_id, kategori, kontenjan, sure_dakika, durum) VALUES (?,?,?,?,?, 'aktif')";
+                PreparedStatement ps = conn.prepareStatement(q);
+                ps.setString(1, dersAd);
+                ps.setInt(2, Integer.parseInt(antrenorId));
+                ps.setString(3, kategori != null ? kategori : "Kardio");
+                ps.setInt(4, (kontenjan != null && !kontenjan.isEmpty()) ? Integer.parseInt(kontenjan) : 20);
+                ps.setInt(5, (sure != null && !sure.isEmpty()) ? Integer.parseInt(sure) : 60);
+                
+                ps.executeUpdate();
+                ps.close();
+                
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ders başarıyla eklendi!\"}");
+            } catch (NumberFormatException e) {
+                System.out.println("❌ Ders Ekleme hatası (ID Formatı yanlış): " + e.getMessage());
+                sendResponse(ex,400,errJson("Geçersiz sayısal veri!","BAD_REQUEST"));
+            } catch (SQLException e) {
+                System.out.println("❌ Ders Ekleme hatası: " + e.getMessage());
+                sendResponse(ex,500,errJson("Veritabanı hatası","DB_ERROR"));
+            }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // DÜZENLE VE SİL HANDLER'LARI (DERS / ANTRENÖR / EKİPMAN)
+    // ════════════════════════════════════════════════════════════════
+    
+    static class DersGuncelleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                String dersAd = jsonValue(body, "dersAd");
+                int antrenorId = Integer.parseInt(jsonValue(body, "antrenorId"));
+                String kategori = jsonValue(body, "kategori");
+                int kontenjan = Integer.parseInt(jsonValue(body, "kontenjan"));
+                int sure = Integer.parseInt(jsonValue(body, "sure"));
+                String durum = jsonValue(body, "durum");
+
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE siniflar SET ders_adi=?, antrenor_id=?, kategori=?, kontenjan=?, sure_dakika=?, durum=? WHERE ders_id=?");
+                ps.setString(1, dersAd); ps.setInt(2, antrenorId); ps.setString(3, kategori);
+                ps.setInt(4, kontenjan); ps.setInt(5, sure); ps.setString(6, durum); ps.setInt(7, id);
+                ps.executeUpdate(); ps.close();
+
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ders güncellendi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class DersSilHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("DELETE FROM siniflar WHERE ders_id=?");
+                ps.setInt(1, id);
+                ps.executeUpdate(); ps.close();
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ders silindi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class EkipmanGuncelleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                String ad = jsonValue(body, "ad");
+                String kategori = jsonValue(body, "kategori");
+                int adet = Integer.parseInt(jsonValue(body, "adet"));
+                double fiyat = Double.parseDouble(jsonValue(body, "fiyat"));
+                String durum = jsonValue(body, "durum");
+
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE ekipman SET ekipman_adi=?, kategori=?, miktar=?, satin_alma_fiyati=?, durum=? WHERE ekipman_id=?");
+                ps.setString(1, ad); ps.setString(2, kategori); ps.setInt(3, adet);
+                ps.setDouble(4, fiyat); ps.setString(5, durum); ps.setInt(6, id);
+                ps.executeUpdate(); ps.close();
+
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ekipman güncellendi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class EkipmanSilHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("DELETE FROM ekipman WHERE ekipman_id=?");
+                ps.setInt(1, id);
+                ps.executeUpdate(); ps.close();
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Ekipman silindi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class AntrenorGuncelleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                String ad = jsonValue(body, "ad");
+                String soyad = jsonValue(body, "soyad");
+                String email = jsonValue(body, "email");
+                String telefon = jsonValue(body, "telefon");
+                String uzmanlik = jsonValue(body, "uzmanlik");
+                int deneyim = Integer.parseInt(jsonValue(body, "deneyim"));
+                String sertifikalar = jsonValue(body, "sertifikalar");
+                String durum = jsonValue(body, "durum");
+
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                
+                // Get kullanici_id from antrenorler
+                PreparedStatement ps0 = conn.prepareStatement("SELECT kullanici_id FROM antrenorler WHERE antrenor_id=?");
+                ps0.setInt(1, id);
+                ResultSet rs0 = ps0.executeQuery();
+                int kid = -1;
+                if(rs0.next()) kid = rs0.getInt(1);
+                rs0.close(); ps0.close();
+
+                if(kid != -1) {
+                    PreparedStatement psk = conn.prepareStatement("UPDATE kullanicilar SET ad=?, soyad=?, email=?, telefon=? WHERE kullanici_id=?");
+                    psk.setString(1, ad); psk.setString(2, soyad); psk.setString(3, email); psk.setString(4, telefon); psk.setInt(5, kid);
+                    psk.executeUpdate(); psk.close();
+                }
+
+                PreparedStatement psa = conn.prepareStatement(
+                    "UPDATE antrenorler SET uzmanlik_alani=?, deneyim_yili=?, sertifikalar=?, durum=? WHERE antrenor_id=?");
+                psa.setString(1, uzmanlik); psa.setInt(2, deneyim); psa.setString(3, sertifikalar); psa.setString(4, durum); psa.setInt(5, id);
+                psa.executeUpdate(); psa.close();
+
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Antrenör güncellendi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class AntrenorSilHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int id = Integer.parseInt(jsonValue(body, "id"));
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                
+                // Get kullanici_id
+                PreparedStatement ps0 = conn.prepareStatement("SELECT kullanici_id FROM antrenorler WHERE antrenor_id=?");
+                ps0.setInt(1, id);
+                ResultSet rs0 = ps0.executeQuery();
+                int kid = -1;
+                if(rs0.next()) kid = rs0.getInt(1);
+                rs0.close(); ps0.close();
+
+                if(kid != -1) {
+                    PreparedStatement psk = conn.prepareStatement("DELETE FROM kullanicilar WHERE kullanici_id=?");
+                    psk.setInt(1, kid);
+                    psk.executeUpdate(); psk.close(); // cascade siler
+                } else {
+                    PreparedStatement psa = conn.prepareStatement("DELETE FROM antrenorler WHERE antrenor_id=?");
+                    psa.setInt(1, id);
+                    psa.executeUpdate(); psa.close();
+                }
+
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Antrenör silindi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
         }
     }
 }
