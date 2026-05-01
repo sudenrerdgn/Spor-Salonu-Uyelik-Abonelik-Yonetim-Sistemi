@@ -93,6 +93,8 @@ public class ApiServer {
         server.createContext("/api/aylik-gelir",        new AylikGelirHandler());
         server.createContext("/api/aylik-uye",          new AylikUyeHandler());
         server.createContext("/api/aylik-devamsiz",     new AylikDevamsizHandler());
+        server.createContext("/api/rapor-odeme",       new RaporOdemeHandler());
+        server.createContext("/api/rapor-ders",        new RaporDersHandler());
 
         // ── Admin | Üye (kendi verisi) ────────────────────────
         server.createContext("/api/odemeler",          new OdemelerHandler());
@@ -102,6 +104,10 @@ public class ApiServer {
         server.createContext("/api/odeme-yap",         new OdemeYapHandler());
 
         // ── Tüm giriş yapmış kullanıcılar ────────────────────
+        
+        server.createContext("/api/rezervasyon-yap",   new RezervasyonYapHandler());
+        server.createContext("/api/uye-aktivite",      new UyeAktiviteHandler());
+        server.createContext("/api/abonelik-guncelle", new AbonelikGuncelleHandler());
         server.createContext("/api/dersler",           new DerslerHandler());
 
         // ── Admin | Antrenör ──────────────────────────────────
@@ -117,6 +123,9 @@ public class ApiServer {
         // ─── Düzenle ve Sil İşlemleri (Admin) ───
         server.createContext("/api/ders-guncelle",     new DersGuncelleHandler());
         server.createContext("/api/ders-sil",          new DersSilHandler());
+        server.createContext("/api/program-ekle",      new ProgramEkleHandler());
+        server.createContext("/api/program-sil",       new ProgramSilHandler());
+        server.createContext("/api/rezervasyon-iptal", new RezervasyonIptalHandler());
         server.createContext("/api/antrenor-guncelle", new AntrenorGuncelleHandler());
         server.createContext("/api/antrenor-sil",      new AntrenorSilHandler());
         server.createContext("/api/ekipman-guncelle",  new EkipmanGuncelleHandler());
@@ -258,9 +267,17 @@ public class ApiServer {
         String search = "\"" + key + "\"";
         int idx = json.indexOf(search); if (idx == -1) return null;
         int colon = json.indexOf(":", idx);
-        int start = json.indexOf("\"", colon + 1) + 1;
-        int end   = json.indexOf("\"", start);
-        return json.substring(start, end);
+        int start = colon + 1;
+        while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\t')) start++;
+        if (json.charAt(start) == '\"') {
+            start++;
+            int end = json.indexOf("\"", start);
+            return json.substring(start, end);
+        } else {
+            int end = start;
+            while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}' && json.charAt(end) != ' ' && json.charAt(end) != '\n' && json.charAt(end) != '\r') end++;
+            return json.substring(start, end).trim();
+        }
     }
 
     private static String hashPassword(String password) {
@@ -473,67 +490,75 @@ public class ApiServer {
 
     // ═══════════════════════════════════════════════════
     // DOĞRULA — GET /api/dogrula  (Oturum yenileme)
-    // ═══════════════════════════════════════════════════
-    static class DogrulaHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange ex) throws IOException {
-            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
-
-            String[] u = authUser(ex);
-            if (u == null) {
-                sendResponse(ex,401,"{\"basarili\":false,\"mesaj\":\"Token geçersiz veya süresi dolmuş!\",\"kod\":\"TOKEN_INVALID\"}");
-                return;
-            }
-
-            // u[0]=kullanici_id, u[1]=email, u[2]=rol
-            try {
-                int kullaniciId = Integer.parseInt(u[0]);
-                Connection conn = DatabaseBaglanti.baglantiGetir();
-                PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT ad,soyad,email,telefon FROM kullanicilar WHERE kullanici_id=? AND durum=N'aktif'");
-                stmt.setInt(1,kullaniciId);
-                ResultSet rs = stmt.executeQuery();
-
-                if (!rs.next()) {
-                    rs.close(); stmt.close();
-                    sendResponse(ex,401,"{\"basarili\":false,\"mesaj\":\"Hesap aktif değil!\",\"kod\":\"ACCOUNT_INACTIVE\"}");
-                    return;
+    // ═════════════════════════════�                // 1. İstatistikleri hesapla
+                ResultSet rsStats = stmt.executeQuery(
+                    "SELECT " +
+                    "  (SELECT COUNT(*) FROM uyeler) AS toplam, " +
+                    "  (SELECT COUNT(DISTINCT uye_id) FROM uye_abonelikleri WHERE durum=N'aktif' AND bitis_tarihi >= CAST(GETDATE() AS DATE)) AS aktif, " +
+                    "  (SELECT COUNT(DISTINCT uye_id) FROM uye_abonelikleri WHERE durum=N'suresi_doldu' OR bitis_tarihi < CAST(GETDATE() AS DATE)) AS suresiDolan, " +
+                    "  (SELECT COUNT(*) FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye' AND MONTH(k.kayit_tarihi)=MONTH(GETDATE()) AND YEAR(k.kayit_tarihi)=YEAR(GETDATE())) AS buAyYeni");
+                
+                int sToplam=0, sAktif=0, sDolan=0, sYeni=0;
+                if(rsStats.next()){
+                    sToplam = rsStats.getInt("toplam");
+                    sAktif  = rsStats.getInt("aktif");
+                    sDolan  = rsStats.getInt("suresiDolan");
+                    sYeni   = rsStats.getInt("buAyYeni");
                 }
+                rsStats.close();
 
-                String ad    = rs.getString("ad");
-                String soyad = rs.getString("soyad");
-                String email = rs.getString("email");
-                String telefon= rs.getString("telefon");
-                rs.close(); stmt.close();
-
-                String json = String.format(
-                    "{\"basarili\":true,\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
-                    kullaniciId, ad, soyad, email, u[2], telefon!=null?telefon:"");
-                sendResponse(ex,200,json);
-
-            } catch (Exception e) {
-                sendResponse(ex,500,errJson("Sunucu hatası!","SERVER_ERROR"));
-            }
-        }
-    }
-
-    // ═══════════════════════════════════════════════════
-    // ÜYELER — GET /api/uyeler  [Admin]
-    // ═══════════════════════════════════════════════════
-    static class UyelerHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange ex) throws IOException {
-            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
-            if (!requireAdmin(ex)) return;
-
-            try {
-                Connection conn = DatabaseBaglanti.baglantiGetir();
-                Statement stmt  = conn.createStatement();
+                // 2. Üyeleri getir
                 ResultSet rs    = stmt.executeQuery(
                     "SELECT k.kullanici_id,k.ad,k.soyad,k.email,k.telefon,k.cinsiyet," +
                     "k.dogum_tarihi,r.rol_adi,k.durum,k.kayit_tarihi," +
                     "u.uyelik_no," +
                     "p.plan_adi AS abonelik_plan," +
+                    "a.bitis_tarihi AS abonelik_bitis," +
+                    "a.durum AS abonelik_durum " +
+                    "FROM kullanicilar k " +
+                    "JOIN roller r ON k.rol_id=r.role_id " +
+                    "LEFT JOIN uyeler u ON k.kullanici_id=u.kullanici_id " +
+                    "LEFT JOIN (SELECT uye_id,plan_id,bitis_tarihi,durum," +
+                    "ROW_NUMBER()OVER(PARTITION BY uye_id ORDER BY baslangic_tarihi DESC) AS rn " +
+                    "FROM uye_abonelikleri) a ON u.uye_id=a.uye_id AND a.rn=1 " +
+                    "LEFT JOIN uye_planlari p ON a.plan_id=p.plan_id " +
+                    "WHERE r.rol_adi=N'uye' ORDER BY k.kullanici_id");
+                
+                StringBuilder json = new StringBuilder("{\"stats\":{");
+                json.append(String.format("\"toplam\":%d,\"aktif\":%d,\"suresiDolan\":%d,\"buAyYeni\":%d", 
+                    sToplam, sAktif, sDolan, sYeni));
+                json.append("},\"uyeler\":[");
+
+                boolean first=true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    String telefon     = rs.getString("telefon");
+                    String cinsiyet    = rs.getString("cinsiyet");
+                    String uyelikNo    = rs.getString("uyelik_no");
+                    String abPlan      = rs.getString("abonelik_plan");
+                    String abBitis     = rs.getString("abonelik_bitis");
+                    String abDurum     = rs.getString("abonelik_durum");
+                    Timestamp kayitTs  = rs.getTimestamp("kayit_tarihi");
+                    String kayitTarihi = kayitTs!=null?kayitTs.toString().substring(0,10):"";
+                    java.sql.Date dogum = rs.getDate("dogum_tarihi");
+                    String dogumStr    = dogum!=null?dogum.toString():"";
+                    json.append(String.format(
+                        "{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\"," +
+                        "\"telefon\":\"%s\",\"cinsiyet\":\"%s\",\"dogumTarihi\":\"%s\"," +
+                        "\"uyelikNo\":\"%s\"," +
+                        "\"abonelikPlan\":\"%s\",\"abonelikBitis\":\"%s\",\"abonelikDurum\":\"%s\"," +
+                        "\"rol\":\"%s\",\"durum\":\"%s\",\"kayitTarihi\":\"%s\"}",
+                        rs.getInt("kullanici_id"),rs.getString("ad"),rs.getString("soyad"),rs.getString("email"),
+                        telefon!=null?telefon:"",cinsiyet!=null?cinsiyet:"",dogumStr,
+                        uyelikNo!=null?uyelikNo:"",
+                        abPlan!=null?abPlan:"",abBitis!=null?abBitis:"",abDurum!=null?abDurum:"",
+                        rs.getString("rol_adi"),rs.getString("durum"),kayitTarihi));
+                    first=false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex,200,json.toString());
+_adi AS abonelik_plan," +
                     "a.bitis_tarihi AS abonelik_bitis," +
                     "a.durum AS abonelik_durum " +
                     "FROM kullanicilar k " +
@@ -748,60 +773,48 @@ public class ApiServer {
     // ═══════════════════════════════════════════════════
     // İSTATİSTİKLER — GET /api/istatistikler  [Admin]
     // ═══════════════════════════════════════════════════
-    static class IstatistiklerHandler implements HttpHandler {
+        static class IstatistiklerHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
             if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
-            if (!requireAdmin(ex)) return;
+            String[] u = authUser(ex);
+            if (u == null) { sendResponse(ex, 401, errJson("Yetkisiz", "AUTH")); return; }
+            boolean isAdmin = "admin".equals(u[2]);
 
             try {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
-                Statement stmt  = conn.createStatement();
-
-                // Önce süresi dolmuş aktif abonelikleri güncelle
-                stmt.executeUpdate(
-                    "UPDATE uye_abonelikleri SET durum = N'suresi_doldu' " +
-                    "WHERE durum = N'aktif' AND bitis_tarihi < CAST(GETDATE() AS DATE)");
-
-                ResultSet r1=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye'");
-                int toplamUye=r1.next()?r1.getInt("cnt"):0; r1.close();
-
-                ResultSet r2=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye' AND k.durum=N'aktif'");
-                int aktifUye=r2.next()?r2.getInt("cnt"):0; r2.close();
-
-                ResultSet r3=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye' AND k.durum=N'pasif'");
-                int pasifUye=r3.next()?r3.getInt("cnt"):0; r3.close();
-
-                ResultSet r4=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM uye_abonelikleri WHERE durum=N'suresi_doldu'");
-                int suresiDolan=r4.next()?r4.getInt("cnt"):0; r4.close();
-
-                ResultSet r5=stmt.executeQuery("SELECT ISNULL(SUM(miktar),0)AS toplam FROM odemeler WHERE durum=N'tamamlandi' AND MONTH(odeme_tarihi)=MONTH(GETDATE()) AND YEAR(odeme_tarihi)=YEAR(GETDATE())");
-                double buAyGelir=r5.next()?r5.getDouble("toplam"):0; r5.close();
-
-                ResultSet r6=stmt.executeQuery("SELECT ISNULL(SUM(miktar),0)AS toplam FROM odemeler WHERE durum=N'tamamlandi'");
-                double toplamGelir=r6.next()?r6.getDouble("toplam"):0; r6.close();
-
-                ResultSet r7=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM giris_cikis_kayitlari WHERE durum=N'giris' AND CAST(giris_saat AS DATE)=CAST(GETDATE() AS DATE)");
-                int bugunIceride=r7.next()?r7.getInt("cnt"):0; r7.close();
-
-                ResultSet r8=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye' AND MONTH(k.kayit_tarihi)=MONTH(GETDATE()) AND YEAR(k.kayit_tarihi)=YEAR(GETDATE())");
-                int buAyYeni=r8.next()?r8.getInt("cnt"):0; r8.close();
-
-                ResultSet r9=stmt.executeQuery("SELECT COUNT(*)AS cnt FROM uye_abonelikleri WHERE durum=N'aktif'");
-                int aktifAbonelik=r9.next()?r9.getInt("cnt"):0; r9.close();
-
-                stmt.close();
-                sendResponse(ex,200,String.format(
-                    "{\"toplamUye\":%d,\"aktifUye\":%d,\"pasifUye\":%d," +
-                    "\"suresiDolan\":%d,\"aktifAbonelik\":%d," +
-                    "\"buAyGelir\":%.2f,\"toplamGelir\":%.2f," +
-                    "\"bugunIceride\":%d,\"buAyYeniKayit\":%d}",
-                    toplamUye,aktifUye,pasifUye,suresiDolan,aktifAbonelik,
-                    buAyGelir,toplamGelir,bugunIceride,buAyYeni));
-
-            } catch (SQLException e) {
-                sendResponse(ex,500,"{\"hata\":\""+e.getMessage().replace("\"","'")+"\"}");
-            }
+                if (isAdmin) {
+                    Statement stmt = conn.createStatement();
+                    stmt.executeUpdate("UPDATE uye_abonelikleri SET durum = N'suresi_doldu' WHERE durum = N'aktif' AND bitis_tarihi < CAST(GETDATE() AS DATE)");
+                    ResultSet r1=stmt.executeQuery("SELECT COUNT(*) cnt FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id WHERE r.rol_adi=N'uye'");
+                    int toplamUye=r1.next()?r1.getInt(1):0; r1.close();
+                    ResultSet r2=stmt.executeQuery("SELECT ISNULL(SUM(miktar),0) sm FROM odemeler WHERE durum=N'tamamlandi'");
+                    double gelir=r2.next()?r2.getDouble(1):0; r2.close();
+                    ResultSet r3=stmt.executeQuery("SELECT COUNT(*) cnt FROM uye_abonelikleri WHERE durum=N'aktif'");
+                    int aktifAb=r3.next()?r3.getInt(1):0; r3.close();
+                    ResultSet r4=stmt.executeQuery("SELECT COUNT(*) cnt FROM uye_abonelikleri WHERE durum=N'suresi_doldu'");
+                    int dolanAb=r4.next()?r4.getInt(1):0; r4.close();
+                    sendResponse(ex, 200, String.format("{\"toplamUye\":%d,\"buAyGelir\":%.2f,\"aktifAbonelik\":%d,\"suresiDolan\":%d}",
+                        toplamUye, gelir, aktifAb, dolanAb));
+                    stmt.close();
+                } else {
+                    int kid = Integer.parseInt(u[0]);
+                    PreparedStatement ps = conn.prepareStatement(
+                        "SELECT TOP 1 p.plan_adi, DATEDIFF(DAY, GETDATE(), a.bitis_tarihi) as kalan_gun, " +
+                        "(SELECT COUNT(*) FROM sinif_rezervasyonlari r JOIN uyeler u2 ON r.uye_id=u2.uye_id WHERE u2.kullanici_id=? AND r.durum=N'aktif') as ders_sayisi " +
+                        "FROM uye_abonelikleri a JOIN uye_planlari p ON a.plan_id=p.plan_id " +
+                        "JOIN uyeler u ON a.uye_id=u.uye_id WHERE u.kullanici_id=? AND a.durum=N'aktif' ORDER BY a.bitis_tarihi DESC");
+                    ps.setInt(1, kid); ps.setInt(2, kid);
+                    ResultSet rs = ps.executeQuery();
+                    if(rs.next()) {
+                        sendResponse(ex, 200, String.format("{\"aktifPlan\":\"%s\",\"kalanGun\":%d,\"katilanDers\":%d}",
+                            rs.getString("plan_adi"), rs.getInt("kalan_gun"), rs.getInt("ders_sayisi")));
+                    } else {
+                        sendResponse(ex, 200, "{\"aktifPlan\":\"Yok\",\"kalanGun\":0,\"katilanDers\":0}");
+                    }
+                    rs.close(); ps.close();
+                }
+            } catch(Exception e) { sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); }
         }
     }
 
@@ -1104,40 +1117,80 @@ public class ApiServer {
     // ═══════════════════════════════════════════════════
     // GİRİŞ/ÇIKIŞ — GET /api/giris-cikis  [Admin | Antrenör]
     // ═══════════════════════════════════════════════════
-    static class GirisCikisHandler implements HttpHandler {
+        static class GirisCikisHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
             if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
             if (!requireRole(ex,"admin","antrenor")) return;
-
             try {
                 Connection conn=DatabaseBaglanti.baglantiGetir();
                 Statement stmt=conn.createStatement();
+                // 1. İstatistikleri hesapla
+                ResultSet rsStats = stmt.executeQuery(
+                    "SELECT " +
+                    "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE CAST(giris_saat AS DATE) = CAST(GETDATE() AS DATE)) + " +
+                    "  (SELECT COUNT(*) FROM sinif_rezervasyonlari WHERE CAST(r_tarih AS DATE) = CAST(GETDATE() AS DATE) AND durum=N'aktif') AS bugunGiris, " +
+                    "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE durum=N'giris') + " +
+                    "  (SELECT COUNT(*) FROM sinif_rezervasyonlari WHERE CAST(r_tarih AS DATE) = CAST(GETDATE() AS DATE) AND durum=N'aktif') AS iceride, " +
+                    "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE durum=N'cikis') AS cikisYapan, " +
+                    "  (SELECT COUNT(DISTINCT giris_turu) FROM giris_cikis_kayitlari) AS turSayisi");
+                
+                int bugunGiris=0, iceride=0, cikisYapan=0, turSayisi=0;
+                if(rsStats.next()){
+                    bugunGiris = rsStats.getInt("bugunGiris");
+                    iceride    = rsStats.getInt("iceride");
+                    cikisYapan = rsStats.getInt("cikisYapan");
+                    turSayisi  = rsStats.getInt("turSayisi");
+                }
+                rsStats.close();
+
+                // 2. Kayıtları getir
                 ResultSet rs=stmt.executeQuery(
-                    "SELECT g.g_c_id,k.ad+' '+k.soyad AS isim," +
-                    "CONVERT(VARCHAR(5),g.giris_saat,108)AS girisSaat," +
-                    "CASE WHEN g.cikis_saat IS NOT NULL THEN CONVERT(VARCHAR(5),g.cikis_saat,108) ELSE NULL END AS cikisSaat," +
-                    "g.giris_turu,g.durum " +
-                    "FROM giris_cikis_kayitlari g " +
-                    "JOIN kullanicilar k ON g.kullanici_id=k.kullanici_id " +
-                    "WHERE CAST(g.giris_saat AS DATE)=CAST(GETDATE() AS DATE) " +
-                    "ORDER BY g.giris_saat DESC");
-                StringBuilder json=new StringBuilder("["); boolean f=true;
+                    "SELECT * FROM (" +
+                    "  SELECT k.ad + ' ' + k.soyad AS isim, " +
+                    "         FORMAT(g.giris_saat, 'HH:mm') AS giris, " +
+                    "         ISNULL(FORMAT(g.cikis_saat, 'HH:mm'), '') AS cikis, " +
+                    "         g.giris_turu AS turu, " +
+                    "         g.durum, " +
+                    "         g.giris_saat AS srt, " +
+                    "         N'Giriş Kaydı' AS aciklama " +
+                    "  FROM giris_cikis_kayitlari g " +
+                    "  JOIN kullanicilar k ON g.kullanici_id = k.kullanici_id " +
+                    "  UNION ALL " +
+                    "  SELECT k.ad + ' ' + k.soyad AS isim, " +
+                    "         FORMAT(r.olusturma_tarihi, 'HH:mm') AS giris, " +
+                    "         '' AS cikis, " +
+                    "         'normal' AS turu, " +
+                    "         'giris' AS durum, " +
+                    "         r.olusturma_tarihi AS srt, " +
+                    "         s.ders_adi AS aciklama " +
+                    "  FROM sinif_rezervasyonlari r " +
+                    "  JOIN uyeler u ON r.uye_id = u.uye_id " +
+                    "  JOIN kullanicilar k ON u.kullanici_id = k.kullanici_id " +
+                    "  JOIN sinif_programlari sp ON r.program_id = sp.program_id " +
+                    "  JOIN siniflar s ON sp.ders_id = s.ders_id " +
+                    "  WHERE r.durum = N'aktif' AND CAST(r.r_tarih AS DATE) = CAST(GETDATE() AS DATE) " +
+                    ") AS combined ORDER BY srt DESC");
+                
+                StringBuilder json=new StringBuilder("{\"stats\":{");
+                json.append(String.format("\"bugunGiris\":%d,\"iceride\":%d,\"cikisYapan\":%d,\"turSayisi\":%d", 
+                    bugunGiris, iceride, cikisYapan, turSayisi));
+                json.append("},\"kayitlar\":[");
+                
+                boolean f=true;
                 while(rs.next()) {
                     if(!f) json.append(","); f=false;
-                    String cikis=rs.getString("cikisSaat");
-                    json.append(String.format(
-                        "{\"id\":%d,\"uye\":\"%s\",\"giris\":\"%s\",\"cikis\":%s,\"turu\":\"%s\",\"durum\":\"%s\"}",
-                        rs.getInt("g_c_id"),rs.getString("isim"),rs.getString("girisSaat"),
-                        cikis!=null?"\""+cikis+"\"":"null",
-                        rs.getString("giris_turu"),rs.getString("durum")));
+                    String aciklama = rs.getString("aciklama");
+                    String isim = rs.getString("isim");
+                    if (aciklama != null && !aciklama.equals("Giriş Kaydı")) {
+                        isim += " (" + aciklama + ")";
+                    }
+                    json.append(String.format("{\"uye\":\"%s\",\"giris\":\"%s\",\"cikis\":\"%s\",\"turu\":\"%s\",\"durum\":\"%s\"}",
+                        isim, rs.getString("giris"), rs.getString("cikis"), rs.getString("turu"), rs.getString("durum")));
                 }
-                json.append("]");
-                rs.close(); stmt.close();
-                sendResponse(ex,200,json.toString());
-            } catch (SQLException e) {
-                sendResponse(ex,500,"{\"hata\":\""+e.getMessage().replace("\"","'")+"\"}");
-            }
+                json.append("]}"); rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+            } catch (Exception e) { sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); }
         }
     }
 
@@ -1245,8 +1298,10 @@ public class ApiServer {
 
             ex.getResponseHeaders().set("Content-Type", mime);
             ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            // Statik dosyalar için cache
-            ex.getResponseHeaders().set("Cache-Control", "public, max-age=3600");
+            // Statik dosyalar için cache - Geliştirme aşamasında kapalı
+            ex.getResponseHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
+            ex.getResponseHeaders().set("Pragma", "no-cache");
+            ex.getResponseHeaders().set("Expires", "0");
 
             byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
             ex.sendResponseHeaders(200, bytes.length);
@@ -1684,6 +1739,61 @@ public class ApiServer {
         }
     }
 
+    static class RaporOdemeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+                ResultSet rs    = stmt.executeQuery("SELECT odeme_yontemi, COUNT(*) AS adet FROM odemeler GROUP BY odeme_yontemi");
+                StringBuilder json = new StringBuilder("{\"yontemler\":[");
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    String y = rs.getString("odeme_yontemi");
+                    json.append(String.format("{\"yontem\":\"%s\",\"adet\":%d}", (y==null?"Nakit":y), rs.getInt("adet")));
+                    first = false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+            } catch (SQLException e) {
+                sendResponse(ex, 500, "{\"hata\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+            }
+        }
+    }
+
+    static class RaporDersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+                ResultSet rs    = stmt.executeQuery(
+                    "SELECT d.ders_adi, COUNT(r.rezervasyon_id) AS katilim " +
+                    "FROM dersler d " +
+                    "LEFT JOIN rezervasyonlar r ON d.ders_id = r.ders_id " +
+                    "GROUP BY d.ders_adi");
+                StringBuilder json = new StringBuilder("{\"dersler\":[");
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append(String.format("{\"ders\":\"%s\",\"katilim\":%d}", rs.getString("ders_adi"), rs.getInt("katilim")));
+                    first = false;
+                }
+                json.append("]}");
+                rs.close(); stmt.close();
+                sendResponse(ex, 200, json.toString());
+            } catch (SQLException e) {
+                sendResponse(ex, 500, "{\"hata\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+            }
+        }
+    }
+
     static class MailSender {
         // LÜTFEN KENDİ GMAIL ADRESİNİZİ VE "UYGULAMA ŞİFRENİZİ" (App Password) BURAYA YAZIN
         static final String username = "fitzonedestek@gmail.com"; 
@@ -2017,7 +2127,7 @@ public class ApiServer {
                 }
 
                 PreparedStatement psa = conn.prepareStatement(
-                    "UPDATE antrenorler SET uzmanlik_alani=?, deneyim_yili=?, sertifikalar=?, durum=? WHERE antrenor_id=?");
+                    "UPDATE antrenorler SET uzmanlik=?, deneyim_yili=?, sertifikalar=?, durum=? WHERE antrenor_id=?");
                 psa.setString(1, uzmanlik); psa.setInt(2, deneyim); psa.setString(3, sertifikalar); psa.setString(4, durum); psa.setInt(5, id);
                 psa.executeUpdate(); psa.close();
 
@@ -2058,4 +2168,145 @@ public class ApiServer {
             } catch(Exception e) { sendResponse(ex, 500, errJson("Hata: "+e.getMessage(),"ERROR")); }
         }
     }
+
+    static class RezervasyonYapHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireRole(ex,"uye")) return;
+            try {
+                String body = readBody(ex);
+                int programId = Integer.parseInt(jsonValue(body, "program_id"));
+                String[] u = authUser(ex);
+                int kid = Integer.parseInt(u[0]);
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement psU = conn.prepareStatement("SELECT uye_id FROM uyeler WHERE kullanici_id=?");
+                psU.setInt(1, kid); ResultSet rsU = psU.executeQuery();
+                if(!rsU.next()) { sendResponse(ex, 403, "{\"hata\":\"Profil yok\"}"); return; }
+                int uid = rsU.getInt(1); rsU.close(); psU.close();
+                PreparedStatement ps = conn.prepareStatement("INSERT INTO sinif_rezervasyonlari (uye_id, program_id, r_tarih, durum) VALUES (?, ?, CAST(GETDATE() AS DATE), N'aktif')");
+                ps.setInt(1, uid); ps.setInt(2, programId);
+                ps.executeUpdate(); ps.close();
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Derse kayıt olundu!\"}");
+            } catch(Exception e) { 
+                if(e.getMessage() != null && (e.getMessage().contains("UNIQUE") || e.getMessage().contains("uq_rezervasyon")))
+                    sendResponse(ex, 400, "{\"hata\":\"Bu derse zaten kayıtlısınız!\"}");
+                else sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); 
+            }
+        }
+    }
+
+    static class RezervasyonIptalHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAuth(ex)) return;
+            try {
+                String body = readBody(ex);
+                int rezId = Integer.parseInt(jsonValue(body, "rezervasyon_id"));
+                System.out.println("API: Rezervasyon \u0130ptali -> ID:" + rezId);
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("UPDATE sinif_rezervasyonlari SET durum=N'iptal' WHERE rezervasyon_id=?");
+                ps.setInt(1, rezId);
+                int affected = ps.executeUpdate(); ps.close();
+                System.out.println("API: Rezervasyon \u0130ptal Edildi. Etkilenen sat\u0131r: " + affected);
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Rezervasyon iptal edildi.\"}");
+            } catch(Exception e) { 
+                e.printStackTrace();
+                sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); 
+            }
+        }
+    }
+
+    static class ProgramEkleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int dersId = Integer.parseInt(jsonValue(body, "ders_id"));
+                String gun = jsonValue(body, "gun");
+                String bas = jsonValue(body, "baslangic");
+                String bit = jsonValue(body, "bitis");
+                String salon = jsonValue(body, "salon");
+                
+                System.out.println("API: Seans Ekleme -> Ders:" + dersId + " G\u00fcn:" + gun + " Saat:" + bas + "-" + bit);
+                
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("INSERT INTO sinif_programlari (ders_id, gun, baslangic_saati, bitis_saati, salon, durum) VALUES (?, ?, ?, ?, ?, N'aktif')");
+                ps.setInt(1, dersId); ps.setString(2, gun); 
+                ps.setString(3, bas.contains(":") && bas.length() == 5 ? bas + ":00" : bas);
+                ps.setString(4, bit.contains(":") && bit.length() == 5 ? bit + ":00" : bit);
+                ps.setString(5, salon);
+                int affected = ps.executeUpdate(); ps.close();
+                
+                System.out.println("API: Seans Eklendi. Etkilenen sat\u0131r: " + affected);
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Program slotu eklendi.\"}");
+            } catch(Exception e) { 
+                e.printStackTrace();
+                sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); 
+            }
+        }
+    }
+
+    static class ProgramSilHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int pid = Integer.parseInt(jsonValue(body, "program_id"));
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("DELETE FROM sinif_programlari WHERE program_id=?");
+                ps.setInt(1, pid);
+                ps.executeUpdate(); ps.close();
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Program slotu silindi.\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); }
+        }
+    }
+
+    static class UyeAktiviteHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            String[] u = authUser(ex); if (u == null) { sendResponse(ex, 401, "Auth Error"); return; }
+            int kid = Integer.parseInt(u[0]);
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement stmt = conn.prepareStatement(
+                    "SET DATEFIRST 1; WITH Gunler AS (SELECT 1 AS d UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7) " +
+                    "SELECT g.d, ISNULL(SUM(s.sure), 0) as toplam_dk FROM Gunler g " +
+                    "LEFT JOIN sinif_rezervasyonlari r ON DATEPART(dw, r.r_tarih) = g.d " +
+                    "JOIN uyeler u ON r.uye_id = u.uye_id AND u.kullanici_id = ? " +
+                    "JOIN sinif_programlari sp ON r.program_id = sp.program_id " +
+                    "JOIN siniflar s ON sp.ders_id = s.ders_id WHERE r.durum=N'aktif' AND r.r_tarih >= DATEADD(DAY, 1-DATEPART(dw, GETDATE()), CAST(GETDATE() AS DATE)) " +
+                    "GROUP BY g.d ORDER BY g.d");
+                stmt.setInt(1, kid); ResultSet rs = stmt.executeQuery();
+                StringBuilder json = new StringBuilder("{\"aktivite\":["); boolean first = true;
+                while (rs.next()) { if(!first) json.append(","); json.append(rs.getInt("toplam_dk")); first = false; }
+                json.append("]}"); rs.close(); stmt.close(); sendResponse(ex, 200, json.toString());
+            } catch (Exception e) { sendResponse(ex, 500, errJson(e.getMessage(), "ERROR")); }
+        }
+    }
+
+    static class AbonelikGuncelleHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+            try {
+                String body = readBody(ex);
+                int aid = Integer.parseInt(jsonValue(body, "abonelik_id"));
+                String bas = jsonValue(body, "baslangic"); String bit = jsonValue(body, "bitis");
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement("UPDATE uye_abonelikleri SET baslangic_tarihi=?, bitis_tarihi=? WHERE abonelik_id=?");
+                ps.setString(1, bas); ps.setString(2, bit); ps.setInt(3, aid);
+                ps.executeUpdate(); ps.close();
+                sendResponse(ex, 200, "{\"basarili\":true,\"mesaj\":\"Abonelik güncellendi!\"}");
+            } catch(Exception e) { sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); }
+        }
+    }
+
 }

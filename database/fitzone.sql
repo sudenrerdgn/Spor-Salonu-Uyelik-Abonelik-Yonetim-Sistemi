@@ -295,64 +295,15 @@ INSERT INTO uye_abonelikleri (uye_id, plan_id, baslangic_tarihi, bitis_tarihi, d
 GO
 
 -- ── 6. ODEMELER ───────────────────────────
--- Mevcut aboneliklerin ödemeleri (tarih belirtilmiş)
-INSERT INTO odemeler (abonelik_id, miktar, odeme_tarihi, odeme_yontemi, durum) VALUES
-  (1, 850.00,  '2026-01-15', N'kredi_karti', N'tamamlandi'),
-  (2, 550.00,  '2026-02-01', N'nakit',       N'tamamlandi'),
-  (3, 350.00,  '2026-01-03', N'havale',      N'tamamlandi'),
-  (4, 850.00,  '2025-12-01', N'kredi_karti', N'tamamlandi'),
-  (5, 199.00,  '2026-03-01', N'nakit',       N'tamamlandi'),
-  (6, 550.00,  '2025-11-05', N'online',      N'iade'),
-  (7, 350.00,  '2026-02-15', N'kredi_karti', N'tamamlandi'),
-  (8, 850.00,  '2026-01-20', N'kredi_karti', N'tamamlandi');
-GO
-
--- Geçmiş aylara ait ek ödemeler (gelir grafiğini zenginleştirmek için)
-INSERT INTO odemeler (abonelik_id, miktar, odeme_tarihi, odeme_yontemi, durum) VALUES
-  -- Ekim 2025
-  (4, 199.00,  '2025-10-05', N'nakit',       N'tamamlandi'),
-  (4, 350.00,  '2025-10-12', N'havale',      N'tamamlandi'),
-  (4, 550.00,  '2025-10-20', N'kredi_karti', N'tamamlandi'),
-  -- Kasım 2025
-  (6, 850.00,  '2025-11-02', N'kredi_karti', N'tamamlandi'),
-  (4, 350.00,  '2025-11-10', N'nakit',       N'tamamlandi'),
-  (6, 199.00,  '2025-11-18', N'online',      N'tamamlandi'),
-  (4, 550.00,  '2025-11-25', N'havale',      N'tamamlandi'),
-  -- Aralık 2025
-  (4, 850.00,  '2025-12-03', N'kredi_karti', N'tamamlandi'),
-  (4, 550.00,  '2025-12-10', N'nakit',       N'tamamlandi'),
-  (4, 350.00,  '2025-12-15', N'havale',      N'tamamlandi'),
-  (4, 199.00,  '2025-12-22', N'online',      N'tamamlandi'),
-  (4, 850.00,  '2025-12-28', N'kredi_karti', N'tamamlandi'),
-  -- Ocak 2026
-  (1, 550.00,  '2026-01-05', N'nakit',       N'tamamlandi'),
-  (3, 199.00,  '2026-01-08', N'online',      N'tamamlandi'),
-  (1, 350.00,  '2026-01-12', N'havale',      N'tamamlandi'),
-  (8, 550.00,  '2026-01-22', N'kredi_karti', N'tamamlandi'),
-  (1, 850.00,  '2026-01-28', N'nakit',       N'tamamlandi'),
-  -- Şubat 2026
-  (2, 350.00,  '2026-02-03', N'havale',      N'tamamlandi'),
-  (7, 199.00,  '2026-02-08', N'online',      N'tamamlandi'),
-  (2, 850.00,  '2026-02-12', N'kredi_karti', N'tamamlandi'),
-  (7, 550.00,  '2026-02-18', N'nakit',       N'tamamlandi'),
-  (2, 350.00,  '2026-02-22', N'havale',      N'tamamlandi'),
-  (7, 850.00,  '2026-02-26', N'kredi_karti', N'tamamlandi'),
-  -- Mart 2026
-  (5, 550.00,  '2026-03-02', N'nakit',       N'tamamlandi'),
-  (5, 850.00,  '2026-03-07', N'kredi_karti', N'tamamlandi'),
-  (5, 350.00,  '2026-03-12', N'havale',      N'tamamlandi'),
-  (5, 199.00,  '2026-03-18', N'online',      N'tamamlandi'),
-  (5, 550.00,  '2026-03-22', N'kredi_karti', N'tamamlandi'),
-  (5, 850.00,  '2026-03-28', N'nakit',       N'tamamlandi'),
-  (1, 350.00,  '2026-03-30', N'havale',      N'tamamlandi'),
-  -- Nisan 2026
-  (1, 850.00,  '2026-04-02', N'kredi_karti', N'tamamlandi'),
-  (2, 550.00,  '2026-04-05', N'nakit',       N'tamamlandi'),
-  (8, 350.00,  '2026-04-10', N'havale',      N'tamamlandi'),
-  (7, 850.00,  '2026-04-14', N'kredi_karti', N'tamamlandi'),
-  (1, 199.00,  '2026-04-18', N'online',      N'tamamlandi'),
-  (8, 550.00,  '2026-04-22', N'nakit',       N'tamamlandi'),
-  (2, 850.00,  '2026-04-25', N'kredi_karti', N'tamamlandi');
+INSERT INTO odemeler (abonelik_id, miktar, odeme_yontemi, durum) VALUES
+  (1, 850.00,  N'kredi_karti', N'tamamlandi'),
+  (2, 550.00,  N'nakit',       N'tamamlandi'),
+  (3, 350.00,  N'havale',      N'tamamlandi'),
+  (4, 850.00,  N'kredi_karti', N'tamamlandi'),
+  (5, 199.00,  N'nakit',       N'tamamlandi'),
+  (6, 550.00,  N'online',      N'iade'),
+  (7, 350.00,  N'kredi_karti', N'tamamlandi'),
+  (8, 850.00,  N'kredi_karti', N'tamamlandi');
 GO
 
 -- ── 7. ANTRENORLER ────────────────────────

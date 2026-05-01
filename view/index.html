@@ -1,4 +1,3 @@
-Gemini
 <!DOCTYPE html>
 <html lang="tr">
 
@@ -13,6 +12,8 @@ Gemini
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 
 <body>
@@ -229,7 +230,8 @@ Gemini
             <a class="nav-item" href="#" data-page="raporlar" data-role="admin" onclick="navigateTo('raporlar',this)">
                 <i class="fas fa-chart-line"></i> Raporlar
             </a>
-            <a class="nav-item" href="#" data-page="ayarlar" data-role="admin uye antrenor" onclick="navigateTo('ayarlar',this)">
+            <a class="nav-item" href="#" data-page="ayarlar" data-role="admin uye antrenor"
+                onclick="navigateTo('ayarlar',this)">
                 <i class="fas fa-gear"></i> Ayarlar
             </a>
 
@@ -269,18 +271,10 @@ Gemini
                         <p>Bugün, 13 Mart 2026 — Cuma</p>
                     </div>
                     <div class="topbar-right">
-                        <div class="search-bar">
-                            <i class="fas fa-search"></i>
-                            <input type="text" placeholder="Üye ara..." id="searchInput"
-                                oninput="filterMembers(this.value)">
-                        </div>
                         <div class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
                             <i class="fas fa-sun" id="themeIconTopbar"></i>
                         </div>
-                        <div class="icon-btn"><i class="fas fa-bell"></i>
-                            <div class="dot"></div>
-                        </div>
-                            <!-- UI request: remove "Yeni Üye" button -->
+                        <!-- UI request: remove "Yeni Üye" button -->
                     </div>
                 </div>
 
@@ -349,8 +343,6 @@ Gemini
                         <div class="glass-card" style="padding:20px;">
                             <div class="card-header" style="margin-bottom:16px;">
                                 <div class="card-title">Plan Doluluk Oranı</div>
-                                <div class="card-action">Detay <i class="fas fa-chevron-right"
-                                        style="font-size:10px"></i></div>
                             </div>
                             <div class="progress-item">
                                 <div class="progress-top"><span>Platinum</span><span
@@ -390,8 +382,6 @@ Gemini
                         <div class="glass-card" style="padding:20px;">
                             <div class="card-header" style="margin-bottom:12px;">
                                 <div class="card-title">Son Ödemeler</div>
-                                <div class="card-action">Tümü <i class="fas fa-chevron-right"
-                                        style="font-size:10px"></i></div>
                             </div>
                             <div id="recentPayments"></div>
                         </div>
@@ -470,7 +460,6 @@ Gemini
                     <div class="glass-card" id="dashPlanlariCard">
                         <div class="card-header">
                             <div class="card-title">Abonelik Planları</div>
-                            <div class="card-action">Düzenle</div>
                         </div>
                         <div id="planCards"></div>
                     </div>
@@ -479,30 +468,10 @@ Gemini
                     <div class="glass-card" id="dashBugunDerslerCard">
                         <div class="card-header">
                             <div class="card-title">Bugünkü Dersler</div>
-                            <div class="card-action">Tam Takvim</div>
                         </div>
                         <div id="classCards"></div>
                     </div>
 
-                    <!-- HIZLI İŞLEMLER -->
-                    <div class="glass-card" id="dashHizliIslemlerCard">
-                        <div class="card-header">
-                            <div class="card-title">Hızlı İşlemler</div>
-                        </div>
-                        <div class="quick-actions">
-                            <!-- UI request: remove "Üye Ekle" quick action -->
-                            <div class="qa-btn b" onclick="showToast('Ödeme alındı! ✓')"><i
-                                    class="fas fa-credit-card"></i><span>Ödeme Al</span></div>
-                            <div class="qa-btn c" onclick="showToast('Abonelik uzatıldı ✓')"><i
-                                    class="fas fa-clock-rotate-left"></i><span>Abonelik Uzat</span></div>
-                            <div class="qa-btn d" onclick="showToast('Ders oluşturuldu ✓')"><i
-                                    class="fas fa-calendar-plus"></i><span>Ders Ekle</span></div>
-                            <div class="qa-btn" style="color:#4ade80" onclick="showToast('QR giriş kaydedildi ✓')"><i
-                                    class="fas fa-qrcode"></i><span>QR Giriş</span></div>
-                            <div class="qa-btn" style="color:#fb923c" onclick="showToast('Bakım kaydedildi ✓')"><i
-                                    class="fas fa-screwdriver-wrench"></i><span>Bakım Ekle</span></div>
-                        </div>
-                    </div>
 
                 </div>
 
@@ -513,7 +482,6 @@ Gemini
                     <div class="glass-card" id="dashAntrenorlerCard">
                         <div class="card-header">
                             <div class="card-title">Antrenörler</div>
-                            <div class="card-action">Tümü</div>
                         </div>
                         <div id="trainerCards"></div>
                     </div>
@@ -522,7 +490,6 @@ Gemini
                     <div class="glass-card" id="dashGirisCikisCard">
                         <div class="card-header">
                             <div class="card-title">Bugünkü Giriş / Çıkış</div>
-                            <div class="card-action">Geçmiş</div>
                         </div>
                         <div id="accessLogs"></div>
                     </div>
@@ -531,7 +498,6 @@ Gemini
                     <div class="glass-card" id="dashEkipmanCard">
                         <div class="card-header">
                             <div class="card-title">Ekipman Durumu</div>
-                            <div class="card-action">Tümünü Gör</div>
                         </div>
                         <div id="equipmentCards"></div>
                     </div>
@@ -666,9 +632,7 @@ Gemini
                         <h1>Abonelik Yönetimi 📋</h1>
                         <p>Planlar ve aktif abonelikler</p>
                     </div>
-                    <div class="topbar-right"><button id="abonelikYeniPlanBtn" class="btn-primary"
-                            onclick="showToast('Yeni plan oluşturma yakında!')"><i class="fas fa-plus"></i> Yeni
-                            Plan</button></div>
+                    <div class="topbar-right"></div>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-card c1">
@@ -745,14 +709,15 @@ Gemini
                         <h1>Ödeme Yönetimi 💳</h1>
                         <p>Ödeme geçmişi ve istatistikler</p>
                     </div>
-                    <div class="topbar-right"><button id="odemeAlBtn" class="btn-primary" onclick="showToast('Ödeme alma yakında!')"><i
-                                class="fas fa-plus"></i> Ödeme Al</button></div>
+                    <div class="topbar-right"></div>
                 </div>
 
                 <!-- BEKLEYEN ÖDEMELER (sadece üye, dinamik gizli/gösterili) -->
-                <div id="bekleyenOdemelerSection" class="glass-card" style="display:none;margin-bottom:20px;border:1px solid rgba(251,191,36,.3);">
+                <div id="bekleyenOdemelerSection" class="glass-card"
+                    style="display:none;margin-bottom:20px;border:1px solid rgba(251,191,36,.3);">
                     <div class="card-header">
-                        <div class="card-title" style="color:#fbbf24;"><i class="fas fa-clock" style="margin-right:8px;"></i>Bekleyen Ödemeler</div>
+                        <div class="card-title" style="color:#fbbf24;"><i class="fas fa-clock"
+                                style="margin-right:8px;"></i>Bekleyen Ödemeler</div>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -836,9 +801,6 @@ Gemini
                         <h1>Ders Yönetimi 🏋️</h1>
                         <p>Dersler, programlar ve rezervasyonlar</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary"
-                            onclick="showAddClassModal()"><i class="fas fa-plus"></i> Yeni
-                            Ders</button></div>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-card c1">
@@ -894,6 +856,18 @@ Gemini
                 <div class="glass-card" style="margin-bottom:20px;">
                     <div class="card-header">
                         <div class="card-title">Haftalık Program</div>
+                        <div style="display:flex;gap:10px;">
+                            <button class="btn-primary" id="adminAddClassBtn"
+                                style="padding:6px 12px; font-size:11px; border-radius:8px;"
+                                onclick="showAddClassModal()">
+                                <i class="fas fa-plus"></i> Ders Ekle
+                            </button>
+                            <button class="btn-primary" id="adminAddProgramBtn"
+                                style="padding:6px 12px; font-size:11px; border-radius:8px;"
+                                onclick="openAddProgramModal()">
+                                <i class="fas fa-plus"></i> Seans Ekle
+                            </button>
+                        </div>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -938,8 +912,8 @@ Gemini
                         <h1>Antrenör Yönetimi 🏃</h1>
                         <p>Antrenör profilleri ve ders atamaları</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary"
-                            onclick="showAddTrainerModal()"><i class="fas fa-plus"></i> Yeni
+                    <div class="topbar-right"><button class="btn-primary" onclick="showAddTrainerModal()"><i
+                                class="fas fa-plus"></i> Yeni
                             Antrenör</button></div>
                 </div>
                 <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
@@ -975,9 +949,7 @@ Gemini
                         <h1>Giriş / Çıkış Kayıtları 🚪</h1>
                         <p>Bugünkü ve geçmiş giriş-çıkış hareketleri</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary"
-                            onclick="showToast('QR giriş kaydedildi ✓')"><i class="fas fa-qrcode"></i> QR Giriş</button>
-                    </div>
+                    <div class="topbar-right"></div>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-card c1">
@@ -1044,8 +1016,8 @@ Gemini
                         <h1>Ekipman Yönetimi 🔧</h1>
                         <p>Ekipman envanteri ve bakım takibi</p>
                     </div>
-                    <div class="topbar-right"><button class="btn-primary"
-                            onclick="showAddEquipmentModal()"><i class="fas fa-plus"></i> Yeni
+                    <div class="topbar-right"><button class="btn-primary" onclick="showAddEquipmentModal()"><i
+                                class="fas fa-plus"></i> Yeni
                             Ekipman</button></div>
                 </div>
                 <div class="stats-grid">
@@ -1137,7 +1109,7 @@ Gemini
                         <p>Gelir, üyelik ve performans raporları</p>
                     </div>
                     <div class="topbar-right"><button class="btn-primary"
-                            onclick="showToast('Rapor indirme yakında!')"><i class="fas fa-download"></i> PDF
+                            onclick="downloadReportPDF()"><i class="fas fa-download"></i> PDF
                             İndir</button></div>
                 </div>
                 <div class="stats-grid">
@@ -1186,20 +1158,6 @@ Gemini
                         <div class="chart-wrapper" style="height:250px;"><canvas id="raporUyeChart"></canvas></div>
                     </div>
                 </div>
-                <div class="content-grid" style="grid-template-columns:1fr 1fr;margin-top:20px;">
-                    <div class="glass-card">
-                        <div class="card-header">
-                            <div class="card-title">Ödeme Yöntemi Dağılımı</div>
-                        </div>
-                        <div class="chart-wrapper" style="height:250px;"><canvas id="raporOdemeChart"></canvas></div>
-                    </div>
-                    <div class="glass-card">
-                        <div class="card-header">
-                            <div class="card-title">Ders Katılım Oranları</div>
-                        </div>
-                        <div class="chart-wrapper" style="height:250px;"><canvas id="raporDersChart"></canvas></div>
-                    </div>
-                </div>
             </section>
 
             <!-- ═══ PAGE: AYARLAR ═══ -->
@@ -1211,18 +1169,23 @@ Gemini
                     </div>
                 </div>
                 <div class="content-grid" style="grid-template-columns:1fr 1fr;">
-                    
+
                     <!-- NEW PROFIL AYARLARI -->
                     <div class="glass-card" data-role="admin uye antrenor">
                         <div class="card-header">
                             <div class="card-title">Profil Ayarları</div>
                         </div>
                         <div class="settings-form">
-                            <div class="form-field"><label>Ad</label><input type="text" id="profilAd" placeholder="Adınız"></div>
-                            <div class="form-field"><label>Soyad</label><input type="text" id="profilSoyad" placeholder="Soyadınız"></div>
-                            <div class="form-field"><label>E-posta</label><input type="email" id="profilEmail" disabled style="opacity:0.6; cursor:not-allowed;"></div>
-                            <div class="form-field"><label>Telefon</label><input type="text" id="profilTelefon" placeholder="Telefonunuz"></div>
-                            <button class="btn-primary" style="margin-top:16px;" onclick="submitProfilGuncelle()"><i class="fas fa-save"></i> Profili Güncelle</button>
+                            <div class="form-field"><label>Ad</label><input type="text" id="profilAd"
+                                    placeholder="Adınız"></div>
+                            <div class="form-field"><label>Soyad</label><input type="text" id="profilSoyad"
+                                    placeholder="Soyadınız"></div>
+                            <div class="form-field"><label>E-posta</label><input type="email" id="profilEmail" disabled
+                                    style="opacity:0.6; cursor:not-allowed;"></div>
+                            <div class="form-field"><label>Telefon</label><input type="text" id="profilTelefon"
+                                    placeholder="Telefonunuz"></div>
+                            <button class="btn-primary" style="margin-top:16px;" onclick="submitProfilGuncelle()"><i
+                                    class="fas fa-save"></i> Profili Güncelle</button>
                         </div>
                     </div>
 
@@ -1442,17 +1405,22 @@ Gemini
     <!-- ─── DELETE CONFIRM MODAL ─── -->
     <div class="modal-overlay" id="deleteMemberModal" onclick="if(event.target===this)closeDeleteModal()">
         <div class="modal" style="width:420px;text-align:center;">
-            <div style="width:60px;height:60px;border-radius:50%;background:rgba(239,68,68,.15);display:grid;place-items:center;margin:0 auto 16px;">
+            <div
+                style="width:60px;height:60px;border-radius:50%;background:rgba(239,68,68,.15);display:grid;place-items:center;margin:0 auto 16px;">
                 <i class="fas fa-trash" style="font-size:22px;color:#f87171;"></i>
             </div>
             <h2 style="margin-bottom:8px;">Üyeyi Sil</h2>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">Bu üyeyi silmek istediğinizden emin misiniz?</p>
-            <p id="deleteConfirmName" style="font-weight:600;color:var(--text-primary);font-size:15px;margin-bottom:20px;"></p>
-            <p style="color:#f87171;font-size:12px;margin-bottom:20px;"><i class="fas fa-exclamation-triangle"></i> Bu işlem geri alınamaz!</p>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:6px;">Bu üyeyi silmek istediğinizden emin
+                misiniz?</p>
+            <p id="deleteConfirmName"
+                style="font-weight:600;color:var(--text-primary);font-size:15px;margin-bottom:20px;"></p>
+            <p style="color:#f87171;font-size:12px;margin-bottom:20px;"><i class="fas fa-exclamation-triangle"></i> Bu
+                işlem geri alınamaz!</p>
             <input type="hidden" id="deleteId">
             <div class="modal-actions" style="justify-content:center;">
                 <button class="btn-cancel" onclick="closeDeleteModal()">İptal</button>
-                <button class="btn-primary" style="background:linear-gradient(135deg,#ef4444,#dc2626);" onclick="submitDeleteMember()"><i class="fas fa-trash"></i> Sil</button>
+                <button class="btn-primary" style="background:linear-gradient(135deg,#ef4444,#dc2626);"
+                    onclick="submitDeleteMember()"><i class="fas fa-trash"></i> Sil</button>
             </div>
         </div>
     </div>
@@ -1568,8 +1536,10 @@ Gemini
                 <div class="form-field"><label>Ad</label><input type="text" id="editAd" placeholder="Ad"></div>
                 <div class="form-field"><label>Soyad</label><input type="text" id="editSoyad" placeholder="Soyad"></div>
             </div>
-            <div class="form-field" style="margin-top:12px;"><label>E-posta</label><input type="email" id="editEmail" placeholder="ornek@mail.com"></div>
-            <div class="form-field" style="margin-top:12px;"><label>Telefon</label><input type="text" id="editTelefon" placeholder="05xx..."></div>
+            <div class="form-field" style="margin-top:12px;"><label>E-posta</label><input type="email" id="editEmail"
+                    placeholder="ornek@mail.com"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Telefon</label><input type="text" id="editTelefon"
+                    placeholder="05xx..."></div>
             <div class="form-field" style="margin-top:12px;"><label>Durum</label>
                 <select id="editDurum">
                     <option value="aktif">Aktif</option>
@@ -1589,10 +1559,12 @@ Gemini
         <div class="modal" style="width:420px;">
             <h2><i class="fas fa-trash" style="color:#f87171;margin-right:8px;"></i>Üye Sil</h2>
             <input type="hidden" id="deleteId">
-            <p><strong id="deleteConfirmName"></strong> adlı üyeyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <p><strong id="deleteConfirmName"></strong> adlı üyeyi silmek istediğinize emin misiniz? Bu işlem geri
+                alınamaz.</p>
             <div class="modal-actions" style="margin-top:20px;">
                 <button class="btn-secondary" onclick="closeDeleteModal()"><i class="fas fa-times"></i> İptal</button>
-                <button class="btn-primary" style="background:#ef4444;" onclick="submitDeleteMember()"><i class="fas fa-trash"></i> Sil</button>
+                <button class="btn-primary" style="background:#ef4444;" onclick="submitDeleteMember()"><i
+                        class="fas fa-trash"></i> Sil</button>
             </div>
         </div>
     </div>
@@ -1605,19 +1577,26 @@ Gemini
             <h2>Yeni Antrenör Ekle</h2>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div class="form-field"><label>Ad</label><input type="text" id="addTrainerAd" placeholder="Ad"></div>
-                <div class="form-field"><label>Soyad</label><input type="text" id="addTrainerSoyad" placeholder="Soyad"></div>
+                <div class="form-field"><label>Soyad</label><input type="text" id="addTrainerSoyad" placeholder="Soyad">
+                </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>E-posta</label><input type="email" id="addTrainerEmail" placeholder="ornek@mail.com"></div>
-                <div class="form-field"><label>Telefon</label><input type="text" id="addTrainerTelefon" placeholder="05xx..."></div>
+                <div class="form-field"><label>E-posta</label><input type="email" id="addTrainerEmail"
+                        placeholder="ornek@mail.com"></div>
+                <div class="form-field"><label>Telefon</label><input type="text" id="addTrainerTelefon"
+                        placeholder="05xx..."></div>
             </div>
-            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input type="text" id="addTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input
+                    type="text" id="addTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="addTrainerDeneyim" placeholder="Yıl" min="0"></div>
-                <div class="form-field"><label>Sertifikalar</label><input type="text" id="addTrainerSertifikalar" placeholder="Sertifikalar"></div>
+                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="addTrainerDeneyim"
+                        placeholder="Yıl" min="0"></div>
+                <div class="form-field"><label>Sertifikalar</label><input type="text" id="addTrainerSertifikalar"
+                        placeholder="Sertifikalar"></div>
             </div>
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeAddTrainerModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-secondary" onclick="closeAddTrainerModal()"><i class="fas fa-times"></i>
+                    İptal</button>
                 <button class="btn-primary" onclick="submitAddTrainer()"><i class="fas fa-save"></i> Kaydet</button>
             </div>
         </div>
@@ -1627,7 +1606,8 @@ Gemini
     <div class="modal-overlay" id="addEquipmentModal" onclick="if(event.target===this)closeAddEquipmentModal()">
         <div class="modal" style="width:420px;">
             <h2>Yeni Ekipman Ekle</h2>
-            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="addEquipAd" placeholder="Ekipman Adı"></div>
+            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="addEquipAd"
+                    placeholder="Ekipman Adı"></div>
             <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
                 <select id="addEquipKategori">
                     <option value="Kardio">Kardio</option>
@@ -1636,12 +1616,16 @@ Gemini
                 </select>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>Adet</label><input type="number" id="addEquipAdet" placeholder="1" min="1" value="1"></div>
-                <div class="form-field"><label>Fiyat (₺)</label><input type="number" id="addEquipFiyat" placeholder="0" min="0"></div>
+                <div class="form-field"><label>Adet</label><input type="number" id="addEquipAdet" placeholder="1"
+                        min="1" value="1"></div>
+                <div class="form-field"><label>Fiyat (₺)</label><input type="number" id="addEquipFiyat" placeholder="0"
+                        min="0"></div>
             </div>
-            <div class="form-field" style="margin-top:12px;"><label>Satın Alma Tarihi</label><input type="date" id="addEquipTarih"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Satın Alma Tarihi</label><input type="date"
+                    id="addEquipTarih"></div>
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeAddEquipmentModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-secondary" onclick="closeAddEquipmentModal()"><i class="fas fa-times"></i>
+                    İptal</button>
                 <button class="btn-primary" onclick="submitAddEquipment()"><i class="fas fa-save"></i> Kaydet</button>
             </div>
         </div>
@@ -1651,8 +1635,11 @@ Gemini
     <div class="modal-overlay" id="addClassModal" onclick="if(event.target===this)closeAddClassModal()">
         <div class="modal" style="width:420px;">
             <h2>Yeni Ders Ekle</h2>
-            <div class="form-field"><label>Ders Adı</label><input type="text" id="addClassAd" placeholder="Ders Adı"></div>
-            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="addClassAntrenor"><option value="">Seçiniz</option></select></div>
+            <div class="form-field"><label>Ders Adı</label><input type="text" id="addClassAd" placeholder="Ders Adı">
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="addClassAntrenor">
+                    <option value="">Seçiniz</option>
+                </select></div>
             <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
                 <select id="addClassKategori">
                     <option value="Kardio">Kardio</option>
@@ -1662,8 +1649,10 @@ Gemini
                 </select>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>Kontenjan</label><input type="number" id="addClassKontenjan" placeholder="20" min="1" value="20"></div>
-                <div class="form-field"><label>Süre (dk)</label><input type="number" id="addClassSure" placeholder="60" min="15" value="60"></div>
+                <div class="form-field"><label>Kontenjan</label><input type="number" id="addClassKontenjan"
+                        placeholder="20" min="1" value="20"></div>
+                <div class="form-field"><label>Süre (dk)</label><input type="number" id="addClassSure" placeholder="60"
+                        min="15" value="60"></div>
             </div>
             <div class="modal-actions" style="margin-top:20px;">
                 <button class="btn-secondary" onclick="closeAddClassModal()"><i class="fas fa-times"></i> İptal</button>
@@ -1675,16 +1664,20 @@ Gemini
     <!-- ─── GENEL SİLME ONAY MODALI ─── -->
     <div class="modal-overlay" id="universalDeleteModal" onclick="if(event.target===this)closeUniversalDeleteModal()">
         <div class="modal" style="width:400px;text-align:center;">
-            <div style="width:60px;height:60px;background:rgba(239,68,68,0.1);color:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 20px;">
+            <div
+                style="width:60px;height:60px;background:rgba(239,68,68,0.1);color:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 20px;">
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
             <h2>Silme Onayı</h2>
-            <p><strong id="deleteConfirmItemName"></strong> öğesini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <p><strong id="deleteConfirmItemName"></strong> öğesini silmek istediğinize emin misiniz? Bu işlem geri
+                alınamaz.</p>
             <input type="hidden" id="deleteTargetType">
             <input type="hidden" id="deleteTargetId">
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeUniversalDeleteModal()"><i class="fas fa-times"></i> İptal</button>
-                <button class="btn-primary" style="background:#ef4444;" onclick="submitUniversalDelete()"><i class="fas fa-trash"></i> Sil</button>
+                <button class="btn-secondary" onclick="closeUniversalDeleteModal()"><i class="fas fa-times"></i>
+                    İptal</button>
+                <button class="btn-primary" style="background:#ef4444;" onclick="submitUniversalDelete()"><i
+                        class="fas fa-trash"></i> Sil</button>
             </div>
         </div>
     </div>
@@ -1694,8 +1687,11 @@ Gemini
         <div class="modal" style="width:420px;">
             <h2>Ders Düzenle</h2>
             <input type="hidden" id="editClassId">
-            <div class="form-field"><label>Ders Adı</label><input type="text" id="editClassAd" placeholder="Ders Adı"></div>
-            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="editClassAntrenor"><option value="">Seçiniz</option></select></div>
+            <div class="form-field"><label>Ders Adı</label><input type="text" id="editClassAd" placeholder="Ders Adı">
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Antrenör</label><select id="editClassAntrenor">
+                    <option value="">Seçiniz</option>
+                </select></div>
             <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
                 <select id="editClassKategori">
                     <option value="Kardio">Kardio</option>
@@ -1705,7 +1701,8 @@ Gemini
                 </select>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>Kontenjan</label><input type="number" id="editClassKontenjan" min="1"></div>
+                <div class="form-field"><label>Kontenjan</label><input type="number" id="editClassKontenjan" min="1">
+                </div>
                 <div class="form-field"><label>Süre (dk)</label><input type="number" id="editClassSure" min="15"></div>
             </div>
             <div class="form-field" style="margin-top:12px;"><label>Durum</label>
@@ -1715,7 +1712,8 @@ Gemini
                 </select>
             </div>
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeEditClassModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-secondary" onclick="closeEditClassModal()"><i class="fas fa-times"></i>
+                    İptal</button>
                 <button class="btn-primary" onclick="submitEditClass()"><i class="fas fa-save"></i> Kaydet</button>
             </div>
         </div>
@@ -1726,7 +1724,8 @@ Gemini
         <div class="modal" style="width:420px;">
             <h2>Ekipman Düzenle</h2>
             <input type="hidden" id="editEquipId">
-            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="editEquipAd" placeholder="Ekipman Adı"></div>
+            <div class="form-field"><label>Ekipman Adı</label><input type="text" id="editEquipAd"
+                    placeholder="Ekipman Adı"></div>
             <div class="form-field" style="margin-top:12px;"><label>Kategori</label>
                 <select id="editEquipKategori">
                     <option value="Kardio">Kardio</option>
@@ -1746,7 +1745,8 @@ Gemini
                 </select>
             </div>
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeEditEquipmentModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-secondary" onclick="closeEditEquipmentModal()"><i class="fas fa-times"></i>
+                    İptal</button>
                 <button class="btn-primary" onclick="submitEditEquipment()"><i class="fas fa-save"></i> Kaydet</button>
             </div>
         </div>
@@ -1759,16 +1759,22 @@ Gemini
             <input type="hidden" id="editTrainerId">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div class="form-field"><label>Ad</label><input type="text" id="editTrainerAd" placeholder="Ad"></div>
-                <div class="form-field"><label>Soyad</label><input type="text" id="editTrainerSoyad" placeholder="Soyad"></div>
+                <div class="form-field"><label>Soyad</label><input type="text" id="editTrainerSoyad"
+                        placeholder="Soyad"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>E-posta</label><input type="email" id="editTrainerEmail" placeholder="ornek@mail.com"></div>
-                <div class="form-field"><label>Telefon</label><input type="text" id="editTrainerTelefon" placeholder="05xx..."></div>
+                <div class="form-field"><label>E-posta</label><input type="email" id="editTrainerEmail"
+                        placeholder="ornek@mail.com"></div>
+                <div class="form-field"><label>Telefon</label><input type="text" id="editTrainerTelefon"
+                        placeholder="05xx..."></div>
             </div>
-            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input type="text" id="editTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
+            <div class="form-field" style="margin-top:12px;"><label>Uzmanlık (Örn: Yoga, Pilates)</label><input
+                    type="text" id="editTrainerUzmanlik" placeholder="Uzmanlık alanları"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="editTrainerDeneyim" placeholder="Yıl" min="0"></div>
-                <div class="form-field"><label>Sertifikalar</label><input type="text" id="editTrainerSertifikalar" placeholder="Sertifikalar"></div>
+                <div class="form-field"><label>Deneyim Yılı</label><input type="number" id="editTrainerDeneyim"
+                        placeholder="Yıl" min="0"></div>
+                <div class="form-field"><label>Sertifikalar</label><input type="text" id="editTrainerSertifikalar"
+                        placeholder="Sertifikalar"></div>
             </div>
             <div class="form-field" style="margin-top:12px;"><label>Durum</label>
                 <select id="editTrainerDurum">
@@ -1777,8 +1783,110 @@ Gemini
                 </select>
             </div>
             <div class="modal-actions" style="margin-top:20px;">
-                <button class="btn-secondary" onclick="closeEditTrainerModal()"><i class="fas fa-times"></i> İptal</button>
+                <button class="btn-secondary" onclick="closeEditTrainerModal()"><i class="fas fa-times"></i>
+                    İptal</button>
                 <button class="btn-primary" onclick="submitEditTrainer()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── YENI PROGRAM (SEANS) MODAL ─── -->
+    <div class="modal-overlay" id="addProgramModal" onclick="if(event.target===this)closeAddProgramModal()">
+        <div class="modal" style="width:400px;">
+            <h2>Yeni Seans Ekle</h2>
+            <div class="form-field"><label>Ders Seçin</label><select id="addProgDers">
+                    <option value="">Yükleniyor...</option>
+                </select></div>
+            <div class="form-field" style="margin-top:12px;"><label>Gün</label>
+                <select id="addProgGun">
+                    <option value="Pazartesi">Pazartesi</option>
+                    <option value="Salı">Salı</option>
+                    <option value="Çarşamba">Çarşamba</option>
+                    <option value="Perşembe">Perşembe</option>
+                    <option value="Cuma">Cuma</option>
+                    <option value="Cumartesi">Cumartesi</option>
+                    <option value="Pazar">Pazar</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div class="form-field"><label>Başlangıç</label><input type="time" id="addProgBas"></div>
+                <div class="form-field"><label>Bitiş</label><input type="time" id="addProgBit"></div>
+            </div>
+            <div class="form-field" style="margin-top:12px;"><label>Salon</label><input type="text" id="addProgSalon"
+                    placeholder="Örn: Salon A"></div>
+            <div class="modal-actions" style="margin-top:20px;">
+                <button class="btn-secondary" onclick="closeAddProgramModal()"><i class="fas fa-times"></i>
+                    İptal</button>
+                <button class="btn-primary" onclick="submitAddProgram()"><i class="fas fa-save"></i> Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABONELİK DÜZENLE MODAL -->
+    <div class="modal-overlay" id="editAbonelikModal" onclick="if(event.target===this)closeEditAbonelikModal()">
+        <div class="modal" style="width:460px;padding:28px 30px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;">
+                <div>
+                    <h2
+                        style="font-family:'Clash Display',sans-serif;font-size:18px;margin:0 0 5px 0;background:linear-gradient(135deg,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                        Abonelik Tarihleri</h2>
+                    <p style="font-size:12px;color:var(--text-muted);margin:0;">Sadece süre değiştirilebilir — plan
+                        sabit kalır</p>
+                </div>
+                <div onclick="closeEditAbonelikModal()" title="Kapat"
+                    style="width:30px;height:30px;border-radius:8px;background:var(--glass);border:1px solid var(--glass-border);display:grid;place-items:center;cursor:pointer;color:var(--text-muted);flex-shrink:0;transition:color .15s;"
+                    onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">
+                    <i class="fas fa-times" style="font-size:12px;"></i>
+                </div>
+            </div>
+            <input type="hidden" id="editAbonelikId">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                <div>
+                    <label
+                        style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:5px;">Üye</label>
+                    <input type="text" id="editAbonelikUye" disabled
+                        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.03);border:1px solid var(--glass-border);border-radius:9px;padding:9px 12px;font-size:12px;color:var(--text-muted);font-family:'DM Sans',sans-serif;outline:none;cursor:not-allowed;">
+                </div>
+                <div>
+                    <label
+                        style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:5px;">Plan
+                        (sabit)</label>
+                    <input type="text" id="editAbonelikPlan" disabled
+                        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.03);border:1px solid var(--glass-border);border-radius:9px;padding:9px 12px;font-size:12px;color:var(--text-muted);font-family:'DM Sans',sans-serif;outline:none;cursor:not-allowed;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px;">
+                <div>
+                    <label
+                        style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:5px;">Başlangıç
+                        <span style="color:#f87171;">*</span></label>
+                    <input type="date" id="editAbonelikBaslangic"
+                        style="width:100%;box-sizing:border-box;background:var(--glass);border:1px solid var(--glass-border);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text-primary);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;color-scheme:dark;"
+                        onfocus="this.style.borderColor='rgba(139,92,246,.6)'"
+                        onblur="this.style.borderColor='var(--glass-border)'">
+                </div>
+                <div>
+                    <label
+                        style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);display:block;margin-bottom:5px;">Bitiş
+                        <span style="color:#f87171;">*</span></label>
+                    <input type="date" id="editAbonelikBitis"
+                        style="width:100%;box-sizing:border-box;background:var(--glass);border:1px solid var(--glass-border);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--text-primary);font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;color-scheme:dark;"
+                        onfocus="this.style.borderColor='rgba(139,92,246,.6)'"
+                        onblur="this.style.borderColor='var(--glass-border)'">
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button onclick="closeEditAbonelikModal()"
+                    style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--glass-border);background:var(--glass);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .2s;"
+                    onmouseover="this.style.borderColor='rgba(139,92,246,.5)'"
+                    onmouseout="this.style.borderColor='var(--glass-border)'">
+                    İptal
+                </button>
+                <button onclick="submitEditAbonelik()"
+                    style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#8b5cf6,#06b6d4);color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .2s;"
+                    onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+                    <i class="fas fa-calendar-check" style="margin-right:7px;"></i>Tarihleri Kaydet
+                </button>
             </div>
         </div>
     </div>
@@ -1786,7 +1894,7 @@ Gemini
     <!-- TOAST -->
     <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">İşlem başarılı!</span></div>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=18"></script>
     <script>document.addEventListener('DOMContentLoaded', async () => { await initApp(); });</script>
 </body>
 
