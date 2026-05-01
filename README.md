@@ -142,3 +142,55 @@ Projede aşağıdaki güvenlik önlemleri uygulanacaktır:
 # ☁️ Deployment
 
 Proje **AWS Cloud** ortamında yayınlanacaktır.
+
+---
+
+# 🔌 API Endpoints
+
+Sistemde sunulan RESTful API endpointleri ve yetki seviyeleri aşağıdaki gibidir:
+
+### 🌍 Public (Token Gerekmez)
+- `POST /api/kayit` - Yeni üye kaydı
+- `POST /api/giris` - Giriş (JWT token döner)
+- `POST /api/sifremi-unuttum` - Şifremi unuttum e-posta isteği
+- `POST /api/sifre-sifirla` - Şifre sıfırlama işlemi
+- `GET /api/planlar` - Üyelik planları (Landing sayfası için)
+- `GET /api/test` - Veritabanı ve sunucu bağlantı testi
+
+### 🔐 Kimlik Doğrulama
+- `GET /api/dogrula` - Token doğrulama ve oturum yenileme (refresh)
+
+### 👑 Admin
+- `GET /api/uyeler` - Tüm üyeleri listeler
+- `GET /api/kullanicilar` - Sistemdeki tüm kullanıcıları listeler
+- `POST /api/uye-guncelle` - Üye bilgilerini günceller
+- `POST /api/uye-sil` - Üyeyi siler
+- `GET /api/istatistikler` - Dashboard için genel istatistikleri getirir
+- `GET /api/aylik-gelir` - Aylık gelir istatistiklerini getirir
+- `GET /api/aylik-uye` - Aylık üye kayıt istatistiklerini getirir
+- `GET /api/aylik-devamsiz` - Devamsız üye istatistiklerini getirir
+- `POST /api/antrenor-ekle` - Yeni antrenör ekler
+- `POST /api/antrenor-guncelle` - Antrenör bilgilerini günceller
+- `POST /api/antrenor-sil` - Antrenörü siler
+- `POST /api/ekipman-ekle` - Yeni ekipman ekler
+- `POST /api/ekipman-guncelle` - Ekipman bilgilerini günceller
+- `POST /api/ekipman-sil` - Ekipmanı siler
+- `POST /api/ders-ekle` - Yeni ders ekler
+- `POST /api/ders-guncelle` - Ders bilgilerini günceller
+- `POST /api/ders-sil` - Dersi siler
+
+### 🧑‍💼 Admin | Üye (Kendi Verisi)
+- `GET /api/odemeler` - Tüm ödemeleri (Admin) veya üyenin kendi ödemelerini getirir
+- `GET /api/abonelikler` - Tüm abonelikleri (Admin) veya üyenin kendi aboneliklerini getirir
+- `POST /api/profil-guncelle` - Kullanıcı profilini günceller
+- `POST /api/abonelik-satin-al` - Yeni abonelik satın alma işlemi
+- `POST /api/odeme-yap` - Ödeme yapma işlemi
+
+### 🏋️‍♂️ Admin | Antrenör
+- `GET /api/antrenorler-detay` - Antrenör detaylı listesi
+- `GET /api/giris-cikis` - Üye giriş-çıkış kayıtlarını listeler
+- `GET /api/ekipman` - Salondaki ekipman listesi ve durumları
+
+### 👥 Tüm Giriş Yapmış Kullanıcılar
+- `GET /api/dersler` - Salondaki ders programları ve listesi
+
