@@ -151,14 +151,14 @@ public class ApiServer {
     static class JwtUtil {
         private static final long EXPIRY_SEC = 8L * 60 * 60; // 8 saat
 
-        /** Token üret: {kullanici_id, email, rol} → JWT string */
-        static String generate(int id, String email, String rol) {
+        /** Token üret: {kullanici_id, email, rol, csrf} → JWT string */
+        static String generate(int id, String email, String rol, String csrf) {
             try {
                 long now = System.currentTimeMillis() / 1000;
                 String header  = b64u("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
                 String payload = b64u(String.format(
-                    "{\"sub\":%d,\"email\":\"%s\",\"rol\":\"%s\",\"iat\":%d,\"exp\":%d}",
-                    id, email.replace("\"", ""), rol.replace("\"", ""), now, now + EXPIRY_SEC));
+                    "{\"sub\":%d,\"email\":\"%s\",\"rol\":\"%s\",\"csrf\":\"%s\",\"iat\":%d,\"exp\":%d}",
+                    id, email.replace("\"", ""), rol.replace("\"", ""), csrf.replace("\"", ""), now, now + EXPIRY_SEC));
                 String sig = sign(header + "." + payload);
                 return header + "." + payload + "." + sig;
             } catch (Exception e) { throw new RuntimeException("Token üretilemedi", e); }
@@ -166,7 +166,7 @@ public class ApiServer {
 
         /**
          * Token doğrula.
-         * @return String[3] = {kullanici_id(string), email, rol} — geçersizse null
+         * @return String[4] = {kullanici_id(string), email, rol, csrf} — geçersizse null
          */
         static String[] verify(String token) {
             if (token == null) return null;
@@ -177,7 +177,7 @@ public class ApiServer {
                 String json = new String(Base64.getUrlDecoder().decode(pad(p[1])), StandardCharsets.UTF_8);
                 long exp = Long.parseLong(jNum(json, "exp"));
                 if (System.currentTimeMillis() / 1000 > exp) return null;
-                return new String[]{ jNum(json, "sub"), jStr(json, "email"), jStr(json, "rol") };
+                return new String[]{ jNum(json, "sub"), jStr(json, "email"), jStr(json, "rol"), jStr(json, "csrf") };
             } catch (Exception e) { return null; }
         }
 
@@ -242,8 +242,8 @@ public class ApiServer {
     // ═══════════════════════════════════════════════════
     private static void corsHeaders(HttpExchange ex) {
         ex.getResponseHeaders().set("Access-Control-Allow-Origin",  "*");
-        ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token");
         ex.getResponseHeaders().set("Access-Control-Expose-Headers","Authorization");
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
     }
@@ -291,11 +291,23 @@ public class ApiServer {
     }
 
     // ─── Auth yardımcıları ───────────────────────────
-    // Döndürür: [kullanici_id, email, rol] — geçersizse null
+    // Döndürür: [kullanici_id, email, rol, csrf] — geçersizse null
     private static String[] authUser(HttpExchange ex) {
         String h = ex.getRequestHeaders().getFirst("Authorization");
         if (h == null || !h.startsWith("Bearer ")) return null;
-        return JwtUtil.verify(h.substring(7));
+        String[] u = JwtUtil.verify(h.substring(7));
+        if (u == null) return null;
+
+        // CSRF Koruması: Sadece POST, PUT, DELETE gibi durumu değiştiren isteklerde X-CSRF-Token doğrulanır
+        String method = ex.getRequestMethod();
+        if ("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)) {
+            String csrfHeader = ex.getRequestHeaders().getFirst("X-CSRF-Token");
+            if (csrfHeader == null || !csrfHeader.equals(u[3])) {
+                System.out.println("⚠️ CSRF Koruması Devreye Girdi: Token eksik veya hatalı!");
+                return null;
+            }
+        }
+        return u;
     }
 
     private static boolean requireAdmin(HttpExchange ex) throws IOException {
@@ -471,12 +483,13 @@ public class ApiServer {
                     "UPDATE kullanicilar SET son_giris=GETDATE() WHERE kullanici_id=?");
                 upd.setInt(1,id); upd.executeUpdate(); upd.close();
 
-                String token = JwtUtil.generate(id, dbEmail, rolAdi);
+                String csrf = UUID.randomUUID().toString();
+                String token = JwtUtil.generate(id, dbEmail, rolAdi, csrf);
 
                 String json = String.format(
-                    "{\"basarili\":true,\"mesaj\":\"Giriş başarılı!\",\"token\":\"%s\"," +
+                    "{\"basarili\":true,\"mesaj\":\"Giriş başarılı!\",\"token\":\"%s\",\"csrfToken\":\"%s\"," +
                     "\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
-                    token, id, ad, soyad, dbEmail, rolAdi, telefon!=null?telefon:"");
+                    token, csrf, id, ad, soyad, dbEmail, rolAdi, telefon!=null?telefon:"");
 
                 System.out.println("✅ Giriş: "+ad+" "+soyad+" ("+rolAdi+")");
                 sendResponse(ex,200,json);
@@ -514,15 +527,16 @@ public class ApiServer {
                 ResultSet rs = ps.executeQuery();
 
                 if (rs.next()) {
+                    String csrf = UUID.randomUUID().toString();
                     String newToken = JwtUtil.generate(
                         rs.getInt("kullanici_id"),
                         rs.getString("email"),
-                        rs.getString("rol_adi"));
+                        rs.getString("rol_adi"), csrf);
                     String telefon = rs.getString("telefon");
                     String json = String.format(
-                        "{\"basarili\":true,\"token\":\"%s\"," +
+                        "{\"basarili\":true,\"token\":\"%s\",\"csrfToken\":\"%s\"," +
                         "\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
-                        newToken, rs.getInt("kullanici_id"),
+                        newToken, csrf, rs.getInt("kullanici_id"),
                         rs.getString("ad"), rs.getString("soyad"),
                         rs.getString("email"), rs.getString("rol_adi"),
                         telefon != null ? telefon : "");

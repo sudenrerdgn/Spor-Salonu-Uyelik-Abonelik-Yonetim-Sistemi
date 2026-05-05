@@ -130,6 +130,7 @@ function setToken(t)   { localStorage.setItem('fitzone_token', t); }
 function clearToken()  {
   localStorage.removeItem('fitzone_token');
   localStorage.removeItem('fitzone_user');
+  localStorage.removeItem('fitzone_csrf');
 }
 function getSavedUser() {
   try { return JSON.parse(localStorage.getItem('fitzone_user')); } catch { return null; }
@@ -141,9 +142,11 @@ function getSavedUser() {
  */
 function apiFetch(path, options = {}) {
   const token = getToken();
+  const csrf = localStorage.getItem('fitzone_csrf');
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+    ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
     ...(options.headers || {})
   };
   return fetch(API_URL + path, { ...options, headers })
@@ -168,10 +171,17 @@ async function checkSession() {
   const token = getToken();
   if (!token) return false;
   try {
+    const csrf = localStorage.getItem('fitzone_csrf');
     const data = await fetch(API_URL + '/api/dogrula', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      headers: { 
+        'Authorization': 'Bearer ' + token, 
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {})
+      }
     }).then(r => r.json());
     if (data.basarili) {
+      if (data.token) setToken(data.token);
+      if (data.csrfToken) localStorage.setItem('fitzone_csrf', data.csrfToken);
       const k = data.kullanici;
       const saved = getSavedUser() || {};
       const user = {
@@ -1920,6 +1930,9 @@ function handleLogin() {
       if (data.token) {
         setToken(data.token);
         localStorage.setItem('fitzone_user', JSON.stringify(data.kullanici));
+      }
+      if (data.csrfToken) {
+        localStorage.setItem('fitzone_csrf', data.csrfToken);
       }
       // Beni Hatırla: checkbox durumuna göre kaydet veya sil
       const rememberChecked = document.getElementById('rememberMe').checked;
