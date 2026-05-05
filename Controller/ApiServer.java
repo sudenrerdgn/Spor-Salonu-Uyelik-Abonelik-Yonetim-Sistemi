@@ -488,9 +488,70 @@ public class ApiServer {
         }
     }
 
-    // ═══════════════════════════════════════════════════
-    // DOĞRULA — GET /api/dogrula  (Oturum yenileme)
-    // ═════════════════════════════�                // 1. İstatistikleri hesapla
+    // ===================================================================
+    // DOGRULA - GET /api/dogrula  (Oturum yenileme)
+    // ===================================================================
+    static class DogrulaHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            String[] u = authUser(ex);
+            if (u == null) {
+                sendResponse(ex, 401, "{\"basarili\":false,\"mesaj\":\"Token gecersiz veya suresi dolmus!\"}");
+                return;
+            }
+            try {
+                int kullaniciId = Integer.parseInt(u[0]);
+                String email = u[1];
+                String rol = u[2];
+
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                PreparedStatement ps = conn.prepareStatement(
+                    "SELECT k.kullanici_id,k.ad,k.soyad,k.email,r.rol_adi,k.telefon " +
+                    "FROM kullanicilar k JOIN roller r ON k.rol_id=r.role_id " +
+                    "WHERE k.kullanici_id=?");
+                ps.setInt(1, kullaniciId);
+                ResultSet rs = ps.executeQuery();
+
+                if (rs.next()) {
+                    String newToken = JwtUtil.generate(
+                        rs.getInt("kullanici_id"),
+                        rs.getString("email"),
+                        rs.getString("rol_adi"));
+                    String telefon = rs.getString("telefon");
+                    String json = String.format(
+                        "{\"basarili\":true,\"token\":\"%s\"," +
+                        "\"kullanici\":{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\",\"rol\":\"%s\",\"telefon\":\"%s\"}}",
+                        newToken, rs.getInt("kullanici_id"),
+                        rs.getString("ad"), rs.getString("soyad"),
+                        rs.getString("email"), rs.getString("rol_adi"),
+                        telefon != null ? telefon : "");
+                    rs.close(); ps.close();
+                    sendResponse(ex, 200, json);
+                } else {
+                    rs.close(); ps.close();
+                    sendResponse(ex, 404, "{\"basarili\":false,\"mesaj\":\"Kullanici bulunamadi!\"}");
+                }
+            } catch (Exception e) {
+                sendResponse(ex, 500, errJson(e.getMessage(), "ERROR"));
+            }
+        }
+    }
+
+    // ===================================================================
+    // UYELER - GET /api/uyeler  [Admin]
+    // ===================================================================
+    static class UyelerHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            if (!requireAdmin(ex)) return;
+
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt  = conn.createStatement();
+
+                // 1. Istatistikleri hesapla
                 ResultSet rsStats = stmt.executeQuery(
                     "SELECT " +
                     "  (SELECT COUNT(*) FROM uyeler) AS toplam, " +
@@ -507,8 +568,8 @@ public class ApiServer {
                 }
                 rsStats.close();
 
-                // 2. Üyeleri getir
-                ResultSet rs    = stmt.executeQuery(
+                // 2. Uyeleri getir
+                ResultSet rs = stmt.executeQuery(
                     "SELECT k.kullanici_id,k.ad,k.soyad,k.email,k.telefon,k.cinsiyet," +
                     "k.dogum_tarihi,r.rol_adi,k.durum,k.kayit_tarihi," +
                     "u.uyelik_no," +
@@ -556,48 +617,6 @@ public class ApiServer {
                     first=false;
                 }
                 json.append("]}");
-                rs.close(); stmt.close();
-                sendResponse(ex,200,json.toString());
-_adi AS abonelik_plan," +
-                    "a.bitis_tarihi AS abonelik_bitis," +
-                    "a.durum AS abonelik_durum " +
-                    "FROM kullanicilar k " +
-                    "JOIN roller r ON k.rol_id=r.role_id " +
-                    "LEFT JOIN uyeler u ON k.kullanici_id=u.kullanici_id " +
-                    "LEFT JOIN (SELECT uye_id,plan_id,bitis_tarihi,durum," +
-                    "ROW_NUMBER()OVER(PARTITION BY uye_id ORDER BY baslangic_tarihi DESC) AS rn " +
-                    "FROM uye_abonelikleri) a ON u.uye_id=a.uye_id AND a.rn=1 " +
-                    "LEFT JOIN uye_planlari p ON a.plan_id=p.plan_id " +
-                    "WHERE r.rol_adi=N'uye' ORDER BY k.kullanici_id");
-
-                StringBuilder json = new StringBuilder("[");
-                boolean first=true;
-                while (rs.next()) {
-                    if (!first) json.append(",");
-                    String telefon     = rs.getString("telefon");
-                    String cinsiyet    = rs.getString("cinsiyet");
-                    String uyelikNo    = rs.getString("uyelik_no");
-                    String abPlan      = rs.getString("abonelik_plan");
-                    String abBitis     = rs.getString("abonelik_bitis");
-                    String abDurum     = rs.getString("abonelik_durum");
-                    Timestamp kayitTs  = rs.getTimestamp("kayit_tarihi");
-                    String kayitTarihi = kayitTs!=null?kayitTs.toString().substring(0,10):"";
-                    java.sql.Date dogum = rs.getDate("dogum_tarihi");
-                    String dogumStr    = dogum!=null?dogum.toString():"";
-                    json.append(String.format(
-                        "{\"id\":%d,\"ad\":\"%s\",\"soyad\":\"%s\",\"email\":\"%s\"," +
-                        "\"telefon\":\"%s\",\"cinsiyet\":\"%s\",\"dogumTarihi\":\"%s\"," +
-                        "\"uyelikNo\":\"%s\"," +
-                        "\"abonelikPlan\":\"%s\",\"abonelikBitis\":\"%s\",\"abonelikDurum\":\"%s\"," +
-                        "\"rol\":\"%s\",\"durum\":\"%s\",\"kayitTarihi\":\"%s\"}",
-                        rs.getInt("kullanici_id"),rs.getString("ad"),rs.getString("soyad"),rs.getString("email"),
-                        telefon!=null?telefon:"",cinsiyet!=null?cinsiyet:"",dogumStr,
-                        uyelikNo!=null?uyelikNo:"",
-                        abPlan!=null?abPlan:"",abBitis!=null?abBitis:"",abDurum!=null?abDurum:"",
-                        rs.getString("rol_adi"),rs.getString("durum"),kayitTarihi));
-                    first=false;
-                }
-                json.append("]");
                 rs.close(); stmt.close();
                 sendResponse(ex,200,json.toString());
             } catch (SQLException e) {

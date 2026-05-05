@@ -8,9 +8,9 @@ public class DatabaseBaglanti {
 
     // ─── SQL Server Bağlantı Bilgileri ───
     // AWS RDS SQL Server
-    private static final String SUNUCU = "fitzonedb.c5ysycmwwuyp.eu-north-1.rds.amazonaws.com";
+    private static final String SUNUCU = "fitzone.cpicuywuucpp.eu-north-1.rds.amazonaws.com";
     private static final String PORT = "1433";
-    private static final String VERITABANI = "fitzone";
+    private static final String VERITABANI = "fitzone_db";
     private static final String KULLANICI_ADI = "admin"; // SQL Server kullanıcısı
     private static final String SIFRE = "admin1234"; // SQL Server şifresi
 
@@ -18,11 +18,11 @@ public class DatabaseBaglanti {
     // Not: databaseName belirtilmezse master'a bağlanır; fitzone DB yoksa hata verir
     private static final String URL = "jdbc:sqlserver://" + SUNUCU + ":" + PORT
             + ";databaseName=" + VERITABANI
-            + ";encrypt=true;trustServerCertificate=true;loginTimeout=10";
+            + ";encrypt=false;loginTimeout=30";
 
     // Test için master bağlantı URL
     private static final String MASTER_URL = "jdbc:sqlserver://" + SUNUCU + ":" + PORT
-            + ";encrypt=true;trustServerCertificate=true;loginTimeout=10";
+            + ";encrypt=false;loginTimeout=30";
 
     private static Connection baglanti = null;
 
