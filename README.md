@@ -33,7 +33,7 @@ Projede aşağıdaki teknolojiler kullanılacaktır:
 - JavaScript
 
 ### Veritabanı
-- PostgreSQL
+- SQL Server Management Studio 22
 
 ### Diğer
 - GitHub
@@ -46,10 +46,12 @@ Projede aşağıdaki teknolojiler kullanılacaktır:
 Sistemde iki farklı kullanıcı rolü bulunmaktadır:
 
 ### Admin
-- Üye ekleme / silme / düzenleme
+- Üye/Antrenör ekleme / silme / düzenleme
 - Abonelik paketlerini yönetme
 - Ödeme kayıtlarını görüntüleme
 - Sistem raporlarını inceleme
+- Dersleri yönetme
+
 
 ### Antrenör
 - Öğrencilerini görüntüleme
@@ -58,6 +60,7 @@ Sistemde iki farklı kullanıcı rolü bulunmaktadır:
   
 ### Üye
 - Kendi abonelik bilgilerini görüntüleme
+- Abonelik planı alma/ödeme
 - Profil bilgilerini güncelleme
 
 ---
@@ -71,7 +74,6 @@ Sistemde iki farklı kullanıcı rolü bulunmaktadır:
 - Üye listeleme
 
 ### 💳 Abonelik Yönetimi
-- Abonelik paketi oluşturma
 - Paket güncelleme
 - Paket silme
 - Paket fiyat ve süre yönetimi
