@@ -4,6 +4,33 @@
 // Backend bağlantısı yapılacak
 // ═══════════════════════════════════════════
 
+// ─── XSS KORUMASI (Global Fetch Wrapper) ───
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    const originalJson = response.json.bind(response);
+    response.json = async () => {
+      const json = await originalJson();
+      const sanitize = (obj) => {
+        if (typeof obj === 'string') {
+          return obj.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        if (Array.isArray(obj)) return obj.map(sanitize);
+        if (typeof obj === 'object' && obj !== null) {
+          const newObj = {};
+          for (const key in obj) newObj[key] = sanitize(obj[key]);
+          return newObj;
+        }
+        return obj;
+      };
+      return sanitize(json);
+    };
+  }
+  return response;
+};
+
 // ─── DEMO VERİLER ───
 const planColors = {
   platinum: { class: 'platinum', icon: '💎', price: '₺850', color: '#a78bfa', bg: 'rgba(139,92,246,.15)' },
