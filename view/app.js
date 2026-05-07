@@ -2458,45 +2458,70 @@ function renderUyeWeeklyCalendar() {
     'Fonksiyonel Fitness': { bg:'rgba(251,146,60,.15)',  color:'#fb923c', icon:'🏋️' },
     'Pilates':             { bg:'rgba(74,222,128,.12)',  color:'#4ade80', icon:'🤸' },
   };
-  // Haftalık program verisi (programData'dan)
-  const programMap = {};
-  gunler.forEach(g => programMap[g] = []);
-  programData.forEach(p => { if (programMap[p.gun]) programMap[p.gun].push(p); });
 
-  // Üyenin rezervasyonları
-  const currentProfile = roleProfiles[currentRole];
-  const uyeRezervasyonlar = rezervasyonData.filter(r => r.uye === currentProfile?.name).map(r => r.ders + r.tarih);
+  // API'den kullanıcının rezervasyonlarını ve programı al
+  apiFetch('/api/dersler').then(data => {
+    const currentProfile = roleProfiles[currentRole];
+    const benimRezervasyonlar = (data.rezervasyonlar || [])
+      .filter(r => r.uye === currentProfile?.name && r.durum === 'aktif');
 
-  let html = `
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;min-width:600px;padding:4px 2px 8px;">
-  `;
-  gunler.forEach(gun => {
-    const dersler = programMap[gun] || [];
-    html += `
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:4px 0;border-bottom:1px solid var(--glass-border);">${gun.slice(0,3)}</div>
-    `;
-    if (dersler.length === 0) {
-      html += `<div style="text-align:center;color:var(--text-muted);font-size:11px;padding:12px 0;">—</div>`;
+    // Rezervasyon yapılan ders isimlerini bul
+    const rezerveDersler = benimRezervasyonlar.map(r => r.ders);
+
+    // Program verisinden sadece kullanıcının rezerve ettiği dersleri filtrele
+    const programMap = {};
+    gunler.forEach(g => programMap[g] = []);
+    (data.program || []).forEach(p => {
+      if (programMap[p.gun] && rezerveDersler.includes(p.ders)) {
+        programMap[p.gun].push(p);
+      }
+    });
+
+    const toplamDers = rezerveDersler.length;
+
+    let html = '';
+    if (toplamDers === 0) {
+      html = `<div style="text-align:center;padding:30px 10px;">
+        <div style="font-size:36px;margin-bottom:12px;">📋</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">Henüz Ders Rezervasyonu Yok</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">Dersler sayfasından ders seçerek haftalık programınızı oluşturabilirsiniz.</div>
+      </div>`;
     } else {
-      dersler.forEach(d => {
-        const r = dersRenkleri[d.ders] || { bg:'rgba(100,116,139,.12)', color:'#94a3b8', icon:'📋' };
-        html += `
-          <div style="background:${r.bg};border:1px solid ${r.color}30;border-radius:10px;padding:8px 7px;cursor:pointer;transition:transform .15s,box-shadow .15s;" 
-               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px ${r.color}25'"
-               onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:16px;text-align:center;margin-bottom:4px;">${r.icon}</div>
-            <div style="font-size:10px;font-weight:700;color:${r.color};text-align:center;line-height:1.3;">${d.ders}</div>
-            <div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:3px;">${d.saat}</div>
-            <div style="font-size:9px;color:var(--text-muted);text-align:center;">${d.salon}</div>
-          </div>
-        `;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 4px;">
+        <div style="font-size:11px;background:rgba(139,92,246,.1);color:#a78bfa;padding:4px 10px;border-radius:16px;font-weight:700;">${toplamDers} Aktif Ders</div>
+      </div>`;
+      html += `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;min-width:600px;padding:4px 2px 8px;">`;
+      gunler.forEach(gun => {
+        const dersler = programMap[gun] || [];
+        html += `<div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:4px 0;border-bottom:1px solid var(--glass-border);">${gun.slice(0,3)}</div>`;
+        if (dersler.length === 0) {
+          html += `<div style="text-align:center;color:var(--text-muted);font-size:11px;padding:12px 0;">—</div>`;
+        } else {
+          dersler.forEach(d => {
+            const r = dersRenkleri[d.ders] || { bg:'rgba(100,116,139,.12)', color:'#94a3b8', icon:'📋' };
+            html += `<div style="background:${r.bg};border:1px solid ${r.color}30;border-radius:10px;padding:8px 7px;cursor:pointer;transition:transform .15s,box-shadow .15s;" 
+                 onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px ${r.color}25'"
+                 onmouseout="this.style.transform='';this.style.boxShadow=''">
+              <div style="font-size:16px;text-align:center;margin-bottom:4px;">${r.icon}</div>
+              <div style="font-size:10px;font-weight:700;color:${r.color};text-align:center;line-height:1.3;">${d.ders}</div>
+              <div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:3px;">${d.saat}</div>
+              <div style="font-size:9px;color:var(--text-muted);text-align:center;">${d.salon}</div>
+            </div>`;
+          });
+        }
+        html += `</div>`;
       });
+      html += `</div>`;
     }
-    html += `</div>`;
+    container.innerHTML = html;
+  }).catch(() => {
+    // Fallback: boş takvim göster
+    container.innerHTML = `<div style="text-align:center;padding:30px 10px;">
+      <div style="font-size:36px;margin-bottom:12px;">⚠️</div>
+      <div style="font-size:13px;color:var(--text-muted);">Ders programı yüklenemedi.</div>
+    </div>`;
   });
-  html += `</div>`;
-  container.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════
@@ -2508,10 +2533,107 @@ function renderUyeAktiviteChart() {
   if (!ctx) return;
   if (uyeAktiviteChartInstance) uyeAktiviteChartInstance.destroy();
 
-  // Üyenin bu haftaki aktivite verisi (demo)
   const gunler = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-  const aktivite = [60, 0, 45, 60, 50, 0, 30]; // dakika cinsinden
+  const gunAdlari = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
+  // Bu haftanın tarihlerini hesapla (Pazartesi'den Pazar'a)
+  const bugun = new Date();
+  const pazartesi = new Date(bugun);
+  const gunFark = bugun.getDay() === 0 ? 6 : bugun.getDay() - 1;
+  pazartesi.setDate(bugun.getDate() - gunFark);
+  pazartesi.setHours(0, 0, 0, 0);
+
+  const haftaTarihleri = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(pazartesi);
+    d.setDate(pazartesi.getDate() + i);
+    haftaTarihleri.push(d.toISOString().split('T')[0]); // YYYY-MM-DD
+  }
+
+  // Kullanıcının giriş-çıkış loglarından aktivite hesapla
+  // Giriş-çıkış API'si admin/antrenör kısıtlıysa, dersler API'sinden rezervasyonlara bak
+  const currentProfile = roleProfiles[currentRole];
+  const userName = currentProfile?.name;
+
+  // Önce giriş-çıkış verisini dene
+  apiFetch('/api/giris-cikis').then(data => {
+    const kayitlar = data.kayitlar || data || [];
+    const aktivite = new Array(7).fill(0);
+
+    // Kullanıcının kendi kayıtlarını filtrele ve gün bazlı dakika hesapla
+    kayitlar.forEach(k => {
+      if (k.uye && k.uye.includes(userName?.split(' ')[0] || '___')) {
+        // Giriş ve çıkış saatinden dakika hesapla
+        const girisD = parseTimeToMinutes(k.giris);
+        const cikisD = k.cikis ? parseTimeToMinutes(k.cikis) : girisD + 60; // Çıkış yoksa 60 dk varsay
+        const sure = Math.max(0, cikisD - girisD);
+
+        // Bugünün hangi güne denk geldiğini bul
+        const bugunIdx = bugun.getDay() === 0 ? 6 : bugun.getDay() - 1;
+        if (k.durum === 'giris' || k.durum === 'cikis') {
+          aktivite[bugunIdx] += sure;
+        }
+      }
+    });
+
+    buildAktiviteChart(ctx, gunler, aktivite);
+  }).catch(() => {
+    // Fallback: Derslerden rezervasyon bazlı aktivite hesapla
+    apiFetch('/api/dersler').then(data => {
+      const aktivite = new Array(7).fill(0);
+      const benimRez = (data.rezervasyonlar || [])
+        .filter(r => r.uye === userName && r.durum === 'aktif');
+
+      // Rezervasyonları gün bazlı eşle
+      benimRez.forEach(r => {
+        // Rezervasyon tarihinden gün bul
+        if (r.tarih) {
+          const dayIdx = haftaTarihleri.indexOf(r.tarih);
+          if (dayIdx >= 0) {
+            aktivite[dayIdx] += 60; // Her ders yaklaşık 60 dk
+          }
+        }
+      });
+
+      // Ayrıca program günlerinden de eşle
+      const rezerveDersler = benimRez.map(r => r.ders);
+      (data.program || []).forEach(p => {
+        if (rezerveDersler.includes(p.ders)) {
+          const gunIdx = gunAdlari.indexOf(p.gun);
+          if (gunIdx >= 0 && aktivite[gunIdx] === 0) {
+            // Saat bilgisinden süre hesapla (ör: 08:00-09:00)
+            const saatParts = (p.saat || '').split('–');
+            if (saatParts.length === 2) {
+              const bas = parseTimeToMinutes(saatParts[0].trim());
+              const bit = parseTimeToMinutes(saatParts[1].trim());
+              aktivite[gunIdx] += Math.max(0, bit - bas);
+            } else {
+              aktivite[gunIdx] += 60;
+            }
+          }
+        }
+      });
+
+      buildAktiviteChart(ctx, gunler, aktivite);
+    }).catch(() => {
+      // Son fallback: boş grafik
+      buildAktiviteChart(ctx, gunler, [0, 0, 0, 0, 0, 0, 0]);
+    });
+  });
+}
+
+// Saat string'ini dakikaya çevir (ör: "08:30" → 510)
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':');
+  return (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
+}
+
+// Aktivite grafiğini oluştur
+function buildAktiviteChart(ctx, gunler, aktivite) {
+  if (uyeAktiviteChartInstance) uyeAktiviteChartInstance.destroy();
+
+  const maxVal = Math.max(...aktivite, 90);
   const grad = ctx.getContext('2d').createLinearGradient(0, 0, 0, 200);
   grad.addColorStop(0, 'rgba(139,92,246,0.85)');
   grad.addColorStop(1, 'rgba(0,212,255,0.6)');
@@ -2544,11 +2666,15 @@ function renderUyeAktiviteChart() {
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: 'rgba(200,210,255,0.55)', font: { size: 11 } }, border: { display: false } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(200,210,255,0.5)', font: { size: 11 }, callback: v => v + ' dk' }, border: { display: false }, min: 0, max: 90 }
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(200,210,255,0.5)', font: { size: 11 }, callback: v => v + ' dk' }, border: { display: false }, min: 0, max: maxVal + 10 }
       }
     }
   });
 }
+
+
+
+
 
 // ═══════════════════════════════════════════
 // ANTRENÖR DASHBOARD — HAFTALIK PROGRAM TAKVİMİ
