@@ -1360,31 +1360,137 @@ function handlePlanSatinAl(planId, planAdi, fiyat) {
 }
 
 // Öde butonu — odeme-yap endpoint’ine istek at
+// Öde butonu — ödeme onay paneli aç
+let odemeOnayYontem = 'online';
+
 function handleOdemeYap(abonelikId) {
   const yontemEl = document.getElementById('yontem_' + abonelikId);
   const yontem   = yontemEl ? yontemEl.value : 'online';
+  odemeOnayYontem = yontem;
+
+  document.getElementById('odemeOnayAbonelikId').value = abonelikId;
+
+  apiFetch('/api/abonelikler').then(abonelikler => {
+    const ab = abonelikler.find(a => a.id === abonelikId || String(a.id) === String(abonelikId));
+    if (ab) {
+      document.getElementById('odemeOnayPlan').textContent = ab.plan || '—';
+      document.getElementById('odemeOnaySure').textContent = ab.baslangic + ' → ' + ab.bitis;
+      const planFiyatMap = { 'Platinum': 850, 'Gold': 550, 'Silver': 350, 'Basic': 199 };
+      const fiyat = planFiyatMap[ab.plan] || 0;
+      document.getElementById('odemeOnayTutar').textContent = '₺' + fiyat.toLocaleString('tr-TR');
+      const savedUser = getSavedUser();
+      const aciklama = document.getElementById('odemeHavaleAciklama');
+      if (aciklama && savedUser) {
+        aciklama.textContent = (savedUser.ad || '') + ' ' + (savedUser.soyad || '');
+      }
+    }
+  }).catch(() => {
+    document.getElementById('odemeOnayPlan').textContent = '—';
+    document.getElementById('odemeOnaySure').textContent = '—';
+    document.getElementById('odemeOnayTutar').textContent = '₺0';
+  });
+
+  const yontemConfig = {
+    'kredi_karti': { icon: 'fa-credit-card', text: 'Kredi Kartı', color: '#a78bfa' },
+    'nakit':       { icon: 'fa-money-bill-wave', text: 'Nakit', color: '#4ade80' },
+    'havale':      { icon: 'fa-building-columns', text: 'Havale / EFT', color: '#6366f1' },
+    'online':      { icon: 'fa-globe', text: 'Online Ödeme', color: '#22d3ee' }
+  };
+  const cfg = yontemConfig[yontem] || yontemConfig.online;
+  document.getElementById('odemeOnayYontemIcon').className = 'fas ' + cfg.icon;
+  document.getElementById('odemeOnayYontemIcon').style.color = cfg.color;
+  document.getElementById('odemeOnayYontemText').textContent = cfg.text;
+
+  document.querySelectorAll('.odeme-panel').forEach(p => p.style.display = 'none');
+  const panel = document.getElementById('odemePanel_' + yontem);
+  if (panel) panel.style.display = '';
+
+  ['odemeKartIsim', 'odemeKartNo', 'odemeKartSKT', 'odemeKartCVV'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  const savedUser = getSavedUser();
+  if (savedUser && document.getElementById('odemeKartIsim')) {
+    document.getElementById('odemeKartIsim').value = (savedUser.ad || '') + ' ' + (savedUser.soyad || '');
+  }
+
+  const btn = document.getElementById('odemeOnaySubmitBtn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Ödemeyi Onayla'; }
+
+  document.getElementById('odemeOnayModal').classList.add('open');
+}
+
+function closeOdemeOnayModal() {
+  document.getElementById('odemeOnayModal').classList.remove('open');
+}
+
+function submitOdemeOnay() {
+  const abonelikId = document.getElementById('odemeOnayAbonelikId').value;
+  const yontem = odemeOnayYontem;
+
+  if (yontem === 'kredi_karti') {
+    const kartNo = (document.getElementById('odemeKartNo').value || '').replace(/\s/g, '');
+    const skt = document.getElementById('odemeKartSKT').value || '';
+    const cvv = document.getElementById('odemeKartCVV').value || '';
+    const isim = document.getElementById('odemeKartIsim').value.trim();
+    if (!isim) { showToast('Kart üzerindeki ismi girin!'); return; }
+    if (kartNo.length < 16) { showToast('Geçerli bir kart numarası girin!'); return; }
+    if (skt.length < 5) { showToast('Son kullanma tarihini girin! (AA/YY)'); return; }
+    if (cvv.length < 3) { showToast('CVV kodunu girin!'); return; }
+  }
+
+  const btn = document.getElementById('odemeOnaySubmitBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...'; }
+
   apiFetch('/api/odeme-yap', {
     method: 'POST',
     body: JSON.stringify({ abonelik_id: String(abonelikId), odeme_yontemi: yontem })
   })
   .then(data => {
     if (data.basarili) {
+      if (btn) { btn.innerHTML = '<i class="fas fa-check"></i> Ödeme Başarılı!'; btn.style.background = 'linear-gradient(135deg,#059669,#10b981)'; }
       showToast('✅ ' + data.mesaj);
-      // Ödemeler + abonelikler + dashboard yenile
-      renderOdemelerPage();
       setTimeout(() => {
-        renderAboneliklerPage();
-        loadDashboardStats();
-        loadMembersFromAPI().then(d => { if(d.length>0) { renderMembers(d); renderUyelerPage(d); } });
-      }, 500);
+        closeOdemeOnayModal();
+        if (btn) { btn.style.background = ''; }
+        renderOdemelerPage();
+        setTimeout(() => {
+          renderAboneliklerPage();
+          loadDashboardStats();
+          loadMembersFromAPI().then(d => { if(d.length>0) { renderMembers(d); renderUyelerPage(d); } });
+        }, 500);
+      }, 1200);
     } else {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Ödemeyi Onayla'; }
       showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
     }
   })
   .catch(e => {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Ödemeyi Onayla'; }
     if (e.message === 'AUTH_ERROR') showToast('⚠️ Giriş yapmanız gerekiyor!');
     else showToast('❌ Bağlantı hatası: ' + e.message);
   });
+}
+
+function formatCardNumber(input) {
+  let value = input.value.replace(/\D/g, '');
+  value = value.substring(0, 16);
+  let formatted = '';
+  for (let i = 0; i < value.length; i++) {
+    if (i > 0 && i % 4 === 0) formatted += ' ';
+    formatted += value[i];
+  }
+  input.value = formatted;
+}
+
+function formatExpiry(input) {
+  let value = input.value.replace(/\D/g, '');
+  value = value.substring(0, 4);
+  if (value.length >= 2) {
+    value = value.substring(0, 2) + '/' + value.substring(2);
+  }
+  input.value = value;
 }
 
 

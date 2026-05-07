@@ -1891,10 +1891,175 @@
         </div>
     </div>
 
+    <!-- ─── ÖDEME ONAY MODAL ─── -->
+    <div class="modal-overlay" id="odemeOnayModal" onclick="if(event.target===this)closeOdemeOnayModal()">
+        <div class="modal" style="width:520px;padding:0;overflow:hidden;border:1px solid rgba(139,92,246,.2);">
+            <!-- Modal Header -->
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));padding:24px 28px 20px;border-bottom:1px solid rgba(139,92,246,.12);">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:18px;">💳</div>
+                        <div>
+                            <h2 style="font-family:'Clash Display',sans-serif;font-size:18px;margin:0;background:linear-gradient(135deg,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Ödeme Yap</h2>
+                            <p style="font-size:11px;color:var(--text-muted);margin:3px 0 0;">Ödeme detaylarını kontrol edin</p>
+                        </div>
+                    </div>
+                    <div onclick="closeOdemeOnayModal()" title="Kapat"
+                        style="width:30px;height:30px;border-radius:8px;background:var(--glass);border:1px solid var(--glass-border);display:grid;place-items:center;cursor:pointer;color:var(--text-muted);flex-shrink:0;transition:all .2s;"
+                        onmouseover="this.style.color='#f87171';this.style.borderColor='rgba(248,113,113,.3)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--glass-border)'">
+                        <i class="fas fa-times" style="font-size:12px;"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding:24px 28px 28px;">
+                <!-- Ödeme Özeti -->
+                <input type="hidden" id="odemeOnayAbonelikId">
+                <div style="background:rgba(255,255,255,.03);border:1px solid var(--glass-border);border-radius:14px;padding:16px 18px;margin-bottom:20px;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px;">ÖDEME ÖZETİ</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:13px;color:var(--text-muted);">Plan</span>
+                        <span style="font-size:13px;font-weight:700;color:var(--text-primary);" id="odemeOnayPlan">—</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:13px;color:var(--text-muted);">Süre</span>
+                        <span style="font-size:13px;color:var(--text-primary);" id="odemeOnaySure">—</span>
+                    </div>
+                    <div style="height:1px;background:var(--glass-border);margin:10px 0;"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:14px;font-weight:700;color:var(--text-primary);">Toplam</span>
+                        <span style="font-size:20px;font-family:'Clash Display',sans-serif;font-weight:700;background:linear-gradient(135deg,#4ade80,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;" id="odemeOnayTutar">₺0</span>
+                    </div>
+                </div>
+
+                <!-- Ödeme Yöntemi Başlık -->
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px;">ÖDEME YÖNTEMİ</div>
+                <div id="odemeOnayYontemLabel" style="display:flex;align-items:center;gap:10px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:10px;padding:10px 14px;margin-bottom:16px;">
+                    <i class="fas fa-credit-card" id="odemeOnayYontemIcon" style="font-size:16px;color:#a78bfa;"></i>
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);" id="odemeOnayYontemText">Kredi Kartı</span>
+                </div>
+
+                <!-- Kredi Kartı Paneli -->
+                <div id="odemePanel_kredi_karti" class="odeme-panel" style="display:none;">
+                    <div style="background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden;">
+                        <div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;border-radius:50%;background:rgba(139,92,246,.15);"></div>
+                        <div style="position:absolute;bottom:-30px;left:-10px;width:80px;height:80px;border-radius:50%;background:rgba(34,211,238,.1);"></div>
+                        <div style="font-size:10px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,.4);margin-bottom:16px;text-transform:uppercase;">Kart Bilgileri</div>
+                        <div class="form-field" style="margin-bottom:12px;">
+                            <label style="font-size:10px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.05em;">KART ÜZERİNDEKİ İSİM</label>
+                            <input type="text" id="odemeKartIsim" placeholder="Ad Soyad" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;box-sizing:border-box;outline:none;font-family:'DM Sans',sans-serif;">
+                        </div>
+                        <div class="form-field" style="margin-bottom:12px;">
+                            <label style="font-size:10px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.05em;">KART NUMARASI</label>
+                            <input type="text" id="odemeKartNo" placeholder="•••• •••• •••• ••••" maxlength="19" oninput="formatCardNumber(this)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:10px 12px;font-size:15px;letter-spacing:2px;width:100%;box-sizing:border-box;outline:none;font-family:'DM Sans',sans-serif;">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                            <div class="form-field">
+                                <label style="font-size:10px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.05em;">SON KULLANMA</label>
+                                <input type="text" id="odemeKartSKT" placeholder="AA/YY" maxlength="5" oninput="formatExpiry(this)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;box-sizing:border-box;outline:none;font-family:'DM Sans',sans-serif;">
+                            </div>
+                            <div class="form-field">
+                                <label style="font-size:10px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.05em;">CVV</label>
+                                <input type="password" id="odemeKartCVV" placeholder="•••" maxlength="3" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:10px 12px;font-size:13px;width:100%;box-sizing:border-box;outline:none;font-family:'DM Sans',sans-serif;">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+                        <i class="fas fa-lock" style="color:#4ade80;font-size:10px;"></i> 256-bit SSL şifreleme ile güvenli ödeme
+                    </div>
+                </div>
+
+                <!-- Nakit Paneli -->
+                <div id="odemePanel_nakit" class="odeme-panel" style="display:none;">
+                    <div style="background:linear-gradient(135deg,rgba(74,222,128,.06),rgba(34,197,94,.04));border:1px solid rgba(74,222,128,.15);border-radius:14px;padding:22px;text-align:center;">
+                        <div style="width:56px;height:56px;border-radius:50%;background:rgba(74,222,128,.12);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 14px;">💵</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">Nakit Ödeme</div>
+                        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+                            Ödemenizi spor salonu resepsiyonunda <strong style="color:#4ade80;">nakit</strong> olarak yapabilirsiniz.<br>
+                            Ödeme sonrası aboneliğiniz otomatik olarak aktif edilecektir.
+                        </div>
+                        <div style="margin-top:14px;padding:10px 16px;border-radius:10px;background:rgba(74,222,128,.08);border:1px dashed rgba(74,222,128,.25);font-size:11px;color:#4ade80;font-weight:600;">
+                            <i class="fas fa-info-circle" style="margin-right:6px;"></i>Resepsiyondan makbuz almayı unutmayın
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Havale Paneli -->
+                <div id="odemePanel_havale" class="odeme-panel" style="display:none;">
+                    <div style="background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(99,102,241,.04));border:1px solid rgba(99,102,241,.15);border-radius:14px;padding:22px;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                            <div style="width:42px;height:42px;border-radius:10px;background:rgba(99,102,241,.12);display:flex;align-items:center;justify-content:center;font-size:20px;">🏦</div>
+                            <div>
+                                <div style="font-size:14px;font-weight:700;color:var(--text-primary);">Havale / EFT</div>
+                                <div style="font-size:11px;color:var(--text-muted);">Aşağıdaki hesaba transfer yapın</div>
+                            </div>
+                        </div>
+                        <div style="background:rgba(255,255,255,.03);border:1px solid var(--glass-border);border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span style="font-size:11px;color:var(--text-muted);">Banka</span>
+                                <span style="font-size:12px;font-weight:600;color:var(--text-primary);">Ziraat Bankası</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span style="font-size:11px;color:var(--text-muted);">Hesap Sahibi</span>
+                                <span style="font-size:12px;font-weight:600;color:var(--text-primary);">FitZone Pro Spor Ltd.</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span style="font-size:11px;color:var(--text-muted);">IBAN</span>
+                                <span style="font-size:12px;font-weight:600;color:#a78bfa;font-family:monospace;letter-spacing:1px;">TR42 0001 0012 3456 7890 1234 56</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;">
+                                <span style="font-size:11px;color:var(--text-muted);">Açıklama</span>
+                                <span style="font-size:12px;font-weight:600;color:#fbbf24;" id="odemeHavaleAciklama">Üyelik No + Ad Soyad</span>
+                            </div>
+                        </div>
+                        <div style="padding:10px 14px;border-radius:10px;background:rgba(251,191,36,.06);border:1px dashed rgba(251,191,36,.2);font-size:11px;color:#fbbf24;font-weight:600;">
+                            <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>Açıklama kısmına üyelik numaranızı yazmayı unutmayın
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Online Paneli -->
+                <div id="odemePanel_online" class="odeme-panel" style="display:none;">
+                    <div style="background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(34,211,238,.04));border:1px solid rgba(0,212,255,.15);border-radius:14px;padding:22px;text-align:center;">
+                        <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,212,255,.12);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 14px;">🌐</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">Online Ödeme</div>
+                        <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+                            Güvenli ödeme sayfasına yönlendirileceksiniz.<br>
+                            İşlem tamamlandıktan sonra aboneliğiniz <strong style="color:#22d3ee;">anında</strong> aktif olacaktır.
+                        </div>
+                        <div style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:14px;">
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);"><i class="fab fa-cc-visa" style="font-size:18px;color:#1a1f71;"></i></div>
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);"><i class="fab fa-cc-mastercard" style="font-size:18px;color:#eb001b;"></i></div>
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);"><i class="fab fa-cc-amex" style="font-size:18px;color:#006fcf;"></i></div>
+                            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);"><i class="fab fa-cc-paypal" style="font-size:18px;color:#003087;"></i></div>
+                        </div>
+                        <div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:#4ade80;">
+                            <i class="fas fa-shield-halved" style="font-size:10px;"></i> 3D Secure güvenli ödeme altyapısı
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Butonlar -->
+                <div style="display:flex;gap:10px;margin-top:20px;">
+                    <button onclick="closeOdemeOnayModal()"
+                        style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--glass-border);background:var(--glass);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;"
+                        onmouseover="this.style.borderColor='rgba(139,92,246,.5)'" onmouseout="this.style.borderColor='var(--glass-border)'">
+                        İptal
+                    </button>
+                    <button onclick="submitOdemeOnay()" id="odemeOnaySubmitBtn"
+                        style="flex:2;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                        <i class="fas fa-check-circle"></i> Ödemeyi Onayla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg">İşlem başarılı!</span></div>
 
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
     <script>document.addEventListener('DOMContentLoaded', async () => { await initApp(); });</script>
 </body>
 
