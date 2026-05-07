@@ -1523,6 +1523,25 @@ const rezervasyonData = [
 ];
 
 let derslerCachedData = [];
+let uyeAktifPlan = null;      // Üyenin aktif abonelik planı ('Basic','Silver','Gold','Platinum' veya null)
+let uyeAktifRezCount = 0;     // Üyenin aktif rezervasyon sayısı
+
+// Plan bazlı ders seçim limitleri
+const PLAN_DERS_LIMIT = {
+  'Basic': 0,
+  'Silver': 2,
+  'Gold': Infinity,
+  'Platinum': Infinity
+};
+
+function getDersLimitText(plan) {
+  if (!plan) return 'Abonelik yok';
+  const limit = PLAN_DERS_LIMIT[plan];
+  if (limit === 0) return 'Ders seçilemez';
+  if (limit === Infinity) return 'Sınırsız';
+  return limit + ' ders';
+}
+
 function renderDerslerPage() {
   // Admin butonlarını her render'da güncelle
   ['adminAddProgramBtn', 'adminAddClassBtn'].forEach(id => {
@@ -1530,28 +1549,109 @@ function renderDerslerPage() {
     if (el) el.style.display = currentRole === 'admin' ? 'flex' : 'none';
   });
 
-  apiFetch('/api/dersler').then(data => {
-    derslerCachedData = data.dersler;
-    const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️', 'Yüzme':'🏊', 'Pilates':'🤸' };
-    const dTb = document.getElementById('derslerTableBody');
-    const isUye = currentRole === 'uye';
+  // Üye ise önce aktif abonelik planını ve rezervasyon sayısını al
+  const isUye = currentRole === 'uye';
+  const planPromise = isUye
+    ? apiFetch('/api/abonelikler').then(abonelikler => {
+        const aktif = abonelikler.find(a => a.durum === 'aktif');
+        uyeAktifPlan = aktif ? aktif.plan : null;
+      }).catch(() => { uyeAktifPlan = null; })
+    : Promise.resolve();
 
-    if (dTb) {
-      dTb.innerHTML = '';
-      data.dersler.forEach(d => {
-        const icon = iconMap[d.kategori] || '📋';
-        let actionBtn = '';
-        if (isUye) {
-            const prog = data.program.find(p => p.ders === d.ders);
-            const targetId = prog ? prog.id : d.id;
-            actionBtn = `<button class="btn-primary" style="padding:6px 12px; font-size:11px; border-radius:8px;" onclick="bookClass(${targetId})"><i class="fas fa-calendar-plus" style="margin-right:5px;"></i> Rezervasyon Yap</button>`;
+  planPromise.then(() => {
+    apiFetch('/api/dersler').then(data => {
+      derslerCachedData = data.dersler;
+      const iconMap = { 'Esneklik':'🧘', 'Kardio':'🥊', 'Güç':'🏋️', 'Yüzme':'🏊', 'Pilates':'🤸' };
+      const dTb = document.getElementById('derslerTableBody');
+
+      // Üyenin aktif rezervasyon sayısını hesapla
+      if (isUye && data.rezervasyonlar) {
+        const currentProfile = roleProfiles[currentRole];
+        uyeAktifRezCount = data.rezervasyonlar.filter(r =>
+          r.uye === currentProfile.name && r.durum === 'aktif'
+        ).length;
+      }
+
+      // Plan limitleri
+      const planLimit = isUye ? (PLAN_DERS_LIMIT[uyeAktifPlan] ?? 0) : Infinity;
+      const kalanHak = Math.max(0, planLimit - uyeAktifRezCount);
+
+      // Üye için plan bilgi banner'ı
+      const infoBanner = document.getElementById('uyeDersLimitBanner');
+      if (isUye && infoBanner) {
+        const planIcon = { 'Platinum':'💎', 'Gold':'⭐', 'Silver':'🥈', 'Basic':'🔰' };
+        const planColor = { 'Platinum':'#a78bfa', 'Gold':'#fbbf24', 'Silver':'#94a3b8', 'Basic':'#67e8f9' };
+        const pIcon = planIcon[uyeAktifPlan] || '❌';
+        const pColor = planColor[uyeAktifPlan] || '#f87171';
+        const limitText = getDersLimitText(uyeAktifPlan);
+
+        if (!uyeAktifPlan) {
+          infoBanner.innerHTML = `<div style="display:flex;align-items:center;gap:12px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:12px;padding:14px 18px;">
+            <span style="font-size:22px;">❌</span>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:#f87171;">Aktif Abonelik Bulunamadı</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Ders seçebilmek için bir abonelik planı satın alın.</div>
+            </div>
+          </div>`;
+        } else if (planLimit === 0) {
+          infoBanner.innerHTML = `<div style="display:flex;align-items:center;gap:12px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:12px;padding:14px 18px;">
+            <span style="font-size:22px;">${pIcon}</span>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:${pColor};">${uyeAktifPlan} Plan — Ders Seçim Hakkı Yok</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Basic planda ders seçimi bulunmamaktadır. Ders seçmek için planınızı yükseltin.</div>
+            </div>
+          </div>`;
+        } else if (planLimit === Infinity) {
+          infoBanner.innerHTML = `<div style="display:flex;align-items:center;gap:12px;background:${pColor}12;border:1px solid ${pColor}33;border-radius:12px;padding:14px 18px;">
+            <span style="font-size:22px;">${pIcon}</span>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:${pColor};">${uyeAktifPlan} Plan — Sınırsız Ders Seçimi</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Tüm derslere sınırsız rezervasyon yapabilirsiniz. Aktif rezervasyon: <strong style="color:${pColor};">${uyeAktifRezCount}</strong></div>
+            </div>
+            <div style="font-size:11px;background:${pColor}22;color:${pColor};padding:5px 12px;border-radius:20px;font-weight:700;">∞ Sınırsız</div>
+          </div>`;
         } else {
-            actionBtn = `<div style="display:flex;gap:6px;justify-content:flex-end;"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="openEditClassModal(${d.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="openDeleteModal('ders',${d.id},'${d.ders}')"><i class="fas fa-trash" style="color:#f87171"></i></div></div>`;
+          const kalanColor = kalanHak > 0 ? '#4ade80' : '#f87171';
+          infoBanner.innerHTML = `<div style="display:flex;align-items:center;gap:12px;background:${pColor}12;border:1px solid ${pColor}33;border-radius:12px;padding:14px 18px;">
+            <span style="font-size:22px;">${pIcon}</span>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:700;color:${pColor};">${uyeAktifPlan} Plan — ${limitText} Hakkı</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Aktif rezervasyon: <strong>${uyeAktifRezCount}</strong> / ${planLimit} — Kalan hak: <strong style="color:${kalanColor};">${kalanHak}</strong></div>
+            </div>
+            <div style="font-size:11px;background:${kalanColor}22;color:${kalanColor};padding:5px 12px;border-radius:20px;font-weight:700;">${kalanHak} / ${planLimit}</div>
+          </div>`;
         }
-        
-        dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot ${d.durum}">${d.durum === 'aktif' ? 'Aktif' : d.durum}</span></td><td style="text-align:right;">${actionBtn}</td></tr>`;
-      });
-    }
+        infoBanner.style.display = '';
+      } else if (infoBanner) {
+        infoBanner.style.display = 'none';
+      }
+
+      if (dTb) {
+        dTb.innerHTML = '';
+        data.dersler.forEach(d => {
+          const icon = iconMap[d.kategori] || '📋';
+          let actionBtn = '';
+          if (isUye) {
+              const prog = data.program.find(p => p.ders === d.ders);
+              const targetId = prog ? prog.id : d.id;
+
+              if (!uyeAktifPlan || planLimit === 0) {
+                // Basic veya abonelik yok — kilitli buton
+                actionBtn = `<button disabled style="padding:6px 12px; font-size:11px; border-radius:8px; background:rgba(148,163,184,.1); border:1px solid rgba(148,163,184,.15); color:#94a3b8; cursor:not-allowed; display:flex; align-items:center; gap:5px;" title="${!uyeAktifPlan ? 'Aktif abonelik gerekli' : 'Basic planda ders seçilemez'}"><i class="fas fa-lock" style="font-size:10px;"></i> ${!uyeAktifPlan ? 'Abonelik Gerekli' : 'Kilitli'}</button>`;
+              } else if (planLimit !== Infinity && kalanHak <= 0) {
+                // Silver ve hak dolmuş
+                actionBtn = `<button disabled style="padding:6px 12px; font-size:11px; border-radius:8px; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.2); color:#fbbf24; cursor:not-allowed; display:flex; align-items:center; gap:5px;" title="Ders seçim hakkınız doldu"><i class="fas fa-exclamation-circle" style="font-size:10px;"></i> Hak Doldu</button>`;
+              } else {
+                // Hak var — aktif buton
+                actionBtn = `<button class="btn-primary" style="padding:6px 12px; font-size:11px; border-radius:8px;" onclick="bookClass(${targetId})"><i class="fas fa-calendar-plus" style="margin-right:5px;"></i> Rezervasyon Yap</button>`;
+              }
+          } else {
+              actionBtn = `<div style="display:flex;gap:6px;justify-content:flex-end;"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="openEditClassModal(${d.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="openDeleteModal('ders',${d.id},'${d.ders}')"><i class="fas fa-trash" style="color:#f87171"></i></div></div>`;
+          }
+          
+          dTb.innerHTML += `<tr><td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><span class="m-name">${d.ders}</span></div></td><td style="color:var(--text-muted);font-size:12px">${d.antrenor}</td><td style="color:var(--text-muted);font-size:12px">${d.kategori}</td><td style="color:var(--text-muted);font-size:12px">${d.kontenjan} kişi</td><td style="color:var(--text-muted);font-size:12px">${d.sure} dk</td><td><span class="status-dot ${d.durum}">${d.durum === 'aktif' ? 'Aktif' : d.durum}</span></td><td style="text-align:right;">${actionBtn}</td></tr>`;
+        });
+      }
     const pTb = document.getElementById('programTableBody');
     if (pTb) {
       pTb.innerHTML = '';
@@ -1627,7 +1727,8 @@ function renderDerslerPage() {
       const uyeCell = isUye ? '' : `<td><div class="member-info"><div class="m-avatar" style="background:${color};width:30px;height:30px;font-size:11px;border-radius:8px">${getInitials(r.uye)}</div><div class="m-name">${r.uye}</div></div></td>`;
       rTb.innerHTML += `<tr>${uyeCell}<td style="color:var(--text-muted);font-size:12px">${r.ders}</td><td style="color:var(--text-muted);font-size:12px">${r.tarih}</td><td style="color:var(--text-muted);font-size:12px">${r.saat}</td><td><span class="status-dot ${r.durum}">${rDurum[r.durum]}</span></td></tr>`;
     });}
-  });
+    });
+  }); // planPromise.then end
 }
 
 // ═══════════════════════════════════════════
@@ -2871,6 +2972,23 @@ function submitEditTrainer() {
 function bookClass(classId) {
     const ders = derslerCachedData.find(d => d.id === classId);
     if (!ders) return;
+
+    // Plan bazlı ders seçim kontrolü
+    if (currentRole === 'uye') {
+        if (!uyeAktifPlan) {
+            showToast('Aktif aboneliğiniz bulunmuyor! Ders seçebilmek için bir plan satın alın.', true);
+            return;
+        }
+        const limit = PLAN_DERS_LIMIT[uyeAktifPlan] ?? 0;
+        if (limit === 0) {
+            showToast('Basic planda ders seçim hakkı bulunmamaktadır. Planınızı yükseltin!', true);
+            return;
+        }
+        if (limit !== Infinity && uyeAktifRezCount >= limit) {
+            showToast(`${uyeAktifPlan} planında maksimum ${limit} ders seçebilirsiniz. Hakkınız doldu!`, true);
+            return;
+        }
+    }
 
     if (confirm(`${ders.ders} dersi için rezervasyon yapmak istediğinize emin misiniz?`)) {
         apiFetch('/api/rezervasyon-yap', {
