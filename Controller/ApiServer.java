@@ -361,7 +361,8 @@ public class ApiServer {
             if (!email.contains("@") || !email.contains(".")) {
                 sendResponse(ex,400,errJson("Geçersiz email formatı!","BAD_REQUEST")); return;
             }
-            if (rol==null||rol.isEmpty()) rol="uye";
+            // İlk kayıtta her zaman 'kullanici' rolü atanır; abonelik alınınca 'uye' olur
+            if (rol==null||rol.isEmpty()||"uye".equals(rol)) rol="kullanici";
             String sifreHash = hashPassword(sifre);
 
             try {
@@ -373,12 +374,24 @@ public class ApiServer {
                 rs.close(); check.close();
                 if (emailVar) { sendResponse(ex,409,errJson("Bu email zaten kayıtlı!","CONFLICT")); return; }
 
-                int rolId=2;
+                // 'kullanici' rolünü bul; yoksa otomatik ekle (migration çalışmamış olabilir)
                 PreparedStatement rolStmt = conn.prepareStatement("SELECT role_id FROM roller WHERE rol_adi=?");
-                rolStmt.setString(1,rol);
+                rolStmt.setString(1, rol);
                 ResultSet rolRs = rolStmt.executeQuery();
-                if (rolRs.next()) rolId=rolRs.getInt("role_id");
+                int rolId = -1;
+                if (rolRs.next()) rolId = rolRs.getInt("role_id");
                 rolRs.close(); rolStmt.close();
+                if (rolId < 0) {
+                    // 'kullanici' rolü tabloda yok → ekle
+                    PreparedStatement insRol = conn.prepareStatement(
+                        "INSERT INTO roller(rol_adi) VALUES(?)", Statement.RETURN_GENERATED_KEYS);
+                    insRol.setString(1, rol);
+                    insRol.executeUpdate();
+                    ResultSet rk = insRol.getGeneratedKeys();
+                    if (rk.next()) rolId = rk.getInt(1);
+                    rk.close(); insRol.close();
+                    System.out.println("✅ '" + rol + "' rolü roller tablosuna otomatik eklendi. role_id=" + rolId);
+                }
 
                 PreparedStatement stmt = conn.prepareStatement(
                     "INSERT INTO kullanicilar (ad,soyad,email,sifre_hash,telefon,cinsiyet,dogum_tarihi,rol_id,durum) VALUES(?,?,?,?,?,?,?,?,N'aktif')",
@@ -397,14 +410,8 @@ public class ApiServer {
                 if (gk.next()) yeniId=gk.getInt(1);
                 gk.close(); stmt.close();
 
-                if ("uye".equals(rol) && yeniId>0) {
-                    Statement cs = conn.createStatement();
-                    ResultSet cr = cs.executeQuery("SELECT COUNT(*) AS cnt FROM uyeler");
-                    int cnt = cr.next()?cr.getInt("cnt"):0; cr.close(); cs.close();
-                    String uNo = String.format("FZ-%d-%03d", java.time.Year.now().getValue(), cnt+1);
-                    PreparedStatement us = conn.prepareStatement("INSERT INTO uyeler(kullanici_id,uyelik_no)VALUES(?,?)");
-                    us.setInt(1,yeniId); us.setString(2,uNo); us.executeUpdate(); us.close();
-                }
+                // 'kullanici' rolünde kayıt edilir; uyeler tablosuna EKLENMEZ.
+                // Abonelik satın alınca uyeler tablosuna eklenip rol 'uye' yapılır.
 
                 System.out.println("✅ Kayıt: "+ad+" "+soyad+" ("+email+")");
                 sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Kayıt başarılı!\"}");
@@ -862,7 +869,7 @@ public class ApiServer {
             if (u==null) { sendResponse(ex,401,errJson("Giriş yapmanız gerekiyor!","UNAUTHORIZED")); return; }
 
             String rol=u[2];
-            if (!"admin".equals(rol) && !"uye".equals(rol)) {
+            if (!"admin".equals(rol) && !"uye".equals(rol) && !"kullanici".equals(rol)) {
                 sendResponse(ex,403,errJson("Bu işlem için yetkiniz yok!","FORBIDDEN")); return;
             }
 
@@ -925,7 +932,7 @@ public class ApiServer {
             if (u==null) { sendResponse(ex,401,errJson("Giriş yapmanız gerekiyor!","UNAUTHORIZED")); return; }
 
             String rol=u[2];
-            if (!"admin".equals(rol) && !"uye".equals(rol)) {
+            if (!"admin".equals(rol) && !"uye".equals(rol) && !"kullanici".equals(rol)) {
                 sendResponse(ex,403,errJson("Bu işlem için yetkiniz yok!","FORBIDDEN")); return;
             }
 
@@ -1493,6 +1500,13 @@ public class ApiServer {
                     ResultSet gk = ins.getGeneratedKeys();
                     if (gk.next()) uyeId = gk.getInt(1);
                     gk.close(); ins.close();
+
+                    // Kullanıcı rolünü 'uye' ye yükselt (ilk kez uyeler tablosuna ekleniyor)
+                    PreparedStatement rolUpd = conn.prepareStatement(
+                        "UPDATE kullanicilar SET rol_id = (SELECT role_id FROM roller WHERE rol_adi=N'uye') WHERE kullanici_id=?");
+                    rolUpd.setInt(1, kullaniciId);
+                    rolUpd.executeUpdate(); rolUpd.close();
+                    System.out.println("✅ Kullanıcı rolü 'uye' ye yükseltildi: kullanici_id=" + kullaniciId);
                 }
 
                 // Mevcut tÜM aktif veya pasif abonelikleri iptal et (bir üye = bir plan kuralı)
@@ -1555,8 +1569,8 @@ public class ApiServer {
             String[] u = authUser(ex);
             System.out.println(">> /api/odeme-yap istegi - auth: " + (u==null?"NULL":u[2]));
             if (u==null) { sendResponse(ex,401,errJson("Giriş yapmanız gerekiyor!","UNAUTHORIZED")); return; }
-            // Admin ve üye ödeme yapabilir
-            if (!"uye".equals(u[2]) && !"admin".equals(u[2])) {
+            // Admin, uye ve kullanici ödeme yapabilir
+            if (!"uye".equals(u[2]) && !"admin".equals(u[2]) && !"kullanici".equals(u[2])) {
                 sendResponse(ex,403,errJson("Bu işlem için yetkiniz yok!","FORBIDDEN")); return;
             }
 
@@ -1601,6 +1615,14 @@ public class ApiServer {
                 pod.setString(1, yontem);
                 pod.setInt(2, Integer.parseInt(abonelikId));
                 pod.executeUpdate(); pod.close();
+
+                // Kullanıcının rolünü 'uye' ye yükselt (eğer hala 'kullanici' ise)
+                PreparedStatement rolUpd = conn.prepareStatement(
+                    "UPDATE kullanicilar SET rol_id = (SELECT role_id FROM roller WHERE rol_adi=N'uye') " +
+                    "WHERE kullanici_id=? AND rol_id = (SELECT role_id FROM roller WHERE rol_adi=N'kullanici')");
+                rolUpd.setInt(1, kullaniciId);
+                int updated = rolUpd.executeUpdate(); rolUpd.close();
+                if (updated > 0) System.out.println("✅ Kullanıcı rolü 'uye' ye yükseltildi: kullanici_id=" + kullaniciId);
 
                 System.out.println("✅ Ödeme tamamlandı: abonelik_id="+abonelikId+" kullanici="+kullaniciId);
                 sendResponse(ex,200,

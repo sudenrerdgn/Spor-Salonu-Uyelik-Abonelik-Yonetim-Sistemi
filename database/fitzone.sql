@@ -242,7 +242,8 @@ INSERT INTO roller (rol_adi) VALUES
   (N'admin'),
   (N'uye'),
   (N'antrenor'),
-  (N'resepsiyonist');
+  (N'resepsiyonist'),
+  (N'kullanici');
 GO
 
 -- ── 2. KULLANICILAR ───────────────────────

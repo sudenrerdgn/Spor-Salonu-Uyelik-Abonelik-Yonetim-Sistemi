@@ -211,16 +211,18 @@ async function checkSession() {
       if (data.csrfToken) localStorage.setItem('fitzone_csrf', data.csrfToken);
       const k = data.kullanici;
       const saved = getSavedUser() || {};
+      // 'kullanici' rolü henüz aboneliği olmayan kayıtlı kullanıcıdır; 'uye' paneliyle gösterilir
+      const effectiveRol = (k.rol === 'kullanici') ? 'uye' : (k.rol || saved.rol || 'uye');
       const user = {
         id:    k.id,
         ad:    k.ad    || saved.ad    || '',
         soyad: k.soyad || saved.soyad || '',
         email: k.email || saved.email || '',
-        rol:   k.rol   || saved.rol   || 'uye',
+        rol:   k.rol   || saved.rol   || 'kullanici',
         telefon: k.telefon || saved.telefon || '',
         name:  (k.ad||saved.ad||'') + ' ' + (k.soyad||saved.soyad||'')
       };
-      loginAs(user.rol, user);
+      loginAs(effectiveRol, user);
       return true;
     }
   } catch(e) { /* network error */ }
@@ -1102,7 +1104,7 @@ function renderAboneliklerPage() {
       const icon = iconMap[p.ad] || '📋';
       const oz = Array.isArray(p.ozellikler) ? p.ozellikler.join(' · ') : (typeof p.ozellikler === 'string' ? p.ozellikler : '');
       // Üye rolundeyse "Plan Seç" butonu göster
-      const satinAlBtn = currentRole === 'uye'
+      const satinAlBtn = (currentRole === 'uye' || currentRole === 'kullanici')
         ? `<button onclick="handlePlanSatinAl(${p.id},'${p.ad}',${p.fiyat})" style="margin-left:auto;background:${c.color}22;color:${c.color};border:1px solid ${c.color}44;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;" onmouseover="this.style.background='${c.color}';this.style.color='#fff'" onmouseout="this.style.background='${c.color}22';this.style.color='${c.color}'">✓ Seç</button>`
         : '';
       planContainer.innerHTML += `<div class="plan-card"><div class="plan-left"><div class="plan-icon" style="background:${c.bg};color:${c.color};font-size:18px;">${icon}</div><div><div class="plan-name">${p.ad}</div><div class="plan-members">${p.aktifUye} aktif üye · ${p.sureAy} ay · ${oz}</div></div></div><div style="display:flex;align-items:center;gap:8px;"><div class="plan-price" style="color:${c.color}">₺${Math.round(p.fiyat)}/ay</div>${satinAlBtn}</div></div>`;
@@ -1454,12 +1456,15 @@ function submitOdemeOnay() {
       setTimeout(() => {
         closeOdemeOnayModal();
         if (btn) { btn.style.background = ''; }
-        renderOdemelerPage();
-        setTimeout(() => {
-          renderAboneliklerPage();
-          loadDashboardStats();
-          loadMembersFromAPI().then(d => { if(d.length>0) { renderMembers(d); renderUyelerPage(d); } });
-        }, 500);
+        // Oturumu yenile: backend 'uye' rolünü atamış olabilir → yeni token al
+        checkSession().then(() => {
+          renderOdemelerPage();
+          setTimeout(() => {
+            renderAboneliklerPage();
+            loadDashboardStats();
+            loadMembersFromAPI().then(d => { if(d.length>0) { renderMembers(d); renderUyelerPage(d); } });
+          }, 500);
+        });
       }, 1200);
     } else {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Ödemeyi Onayla'; }
@@ -2224,7 +2229,7 @@ function handleRegister() {
   fetch(API_URL + '/api/kayit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ad, soyad, email, telefon, cinsiyet, dogum_tarihi: dogum, sifre, rol: 'uye' })
+    body: JSON.stringify({ ad, soyad, email, telefon, cinsiyet, dogum_tarihi: dogum, sifre, rol: 'kullanici' })
   })
   .then(res => res.json())
   .then(data => {
