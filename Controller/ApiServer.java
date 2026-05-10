@@ -1936,7 +1936,7 @@ public class ApiServer {
                 );
                 message.setSubject("FitZone Pro - Şifre Sıfırlama İsteği");
 
-                String resetLink = "http://localhost:8080/?resetToken=" + token;
+                String resetLink = "http://13.53.225.142:8080/?resetToken=" + token;
                 
                 String htmlContent = "<div style='font-family:sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;border-radius:10px;'>"
                                    + "<h2 style='color:#0ea5e9;'>FitZone Pro</h2>"

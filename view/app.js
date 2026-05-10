@@ -146,7 +146,7 @@ function deleteMember(id) {
 // ═══════════════════════════════════════════
 // API — SQL Server üzerinden üye yönetimi
 // ═══════════════════════════════════════════
-const API_URL = 'http://localhost:8080';
+const API_URL = 'http://13.53.225.142:8080';
 let apiMembers = []; // SQL Server'dan gelen üye listesi
 
 // ═══════════════════════════════════════════
@@ -2285,7 +2285,7 @@ function handleForgot() {
     closeForgotModal();
     if(data.token) {
       console.log('%c [TEST] Şifre Sıfırlama Linki: ', 'background: #222; color: #bada55; font-size: 14px;');
-      console.log('http://localhost:8080/?resetToken=' + data.token);
+      console.log('http://13.53.225.142:8080/?resetToken=' + data.token);
       console.log('%c E-posta sunucunuz yapılandırılmamışsa yukarıdaki linki kullanarak test edebilirsiniz.', 'color: #888;');
     }
     showToast(data.mesaj);
@@ -2432,7 +2432,7 @@ function loginAs(role, user) {
   const dashLink = document.querySelector('[data-page="dashboard"]');
   if (dashLink) navigateTo('dashboard', dashLink);
 
-  loadAppData();
+  setTimeout(() => loadAppData(), 100);
   if (isUye)      { renderUyeWeeklyCalendar(); renderUyeAktiviteChart(); }
   if (isAntrenor) { renderAntrenorWeeklyCalendar(); renderAntrenorKatilimChart(); }
   showToast(`${displayRole} olarak giriş yapıldı! 🎉`);
