@@ -57,6 +57,8 @@ public class ApiServer {
     // Production'da bunu environment variable'dan okuyun:
     //   JWT_SECRET = System.getenv("FITZONE_JWT_SECRET");
     private static final String JWT_SECRET = "FitZonePro_2026_GizliAnahtar_#$@!_DeğiştirBunu";
+    // Canlı sunucu URL'si (frontend erişim adresi)
+    private static final String BASE_URL = "http://13.53.225.142:" + PORT;
 
     // ─────────────────────────────────────────────
     public static void main(String[] args) throws IOException {
@@ -137,7 +139,7 @@ public class ApiServer {
         server.setExecutor(null);
         server.start();
 
-        System.out.println("✅ API aktif  : http://localhost:" + PORT);
+        System.out.println("✅ API aktif  : http://0.0.0.0:" + PORT + " (tüm arayüzlerden erişilebilir)");
         System.out.println("─────────────────────────────────────────────────");
         System.out.println("  Public   → POST /api/giris   POST /api/kayit");
         System.out.println("  Admin    → /api/uyeler  /api/istatistikler  ...");
@@ -1936,7 +1938,7 @@ public class ApiServer {
                 );
                 message.setSubject("FitZone Pro - Şifre Sıfırlama İsteği");
 
-                String resetLink = "http://13.53.225.142:8080/?resetToken=" + token;
+                String resetLink = BASE_URL + "/?resetToken=" + token;
                 
                 String htmlContent = "<div style='font-family:sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;border-radius:10px;'>"
                                    + "<h2 style='color:#0ea5e9;'>FitZone Pro</h2>"

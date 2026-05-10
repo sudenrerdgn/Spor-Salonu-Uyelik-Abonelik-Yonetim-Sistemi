@@ -165,7 +165,7 @@ function getSavedUser() {
 
 /** loadPublicStats — Açılış sayfası istatistiklerini yükler */
 function loadPublicStats() {
-    fetch('/api/public-istatistikler')
+    fetch(API_URL + '/api/public-istatistikler')
         .then(res => res.json())
         .then(data => {
             const el1 = document.getElementById('aktifUyeStat');
@@ -1366,11 +1366,14 @@ function handlePlanSatinAl(planId, planAdi, fiyat) {
   .then(data => {
     if (data.basarili) {
       showToast('✅ ' + planAdi + ' seçildi! Lütfen ödemenizi tamamlayın.');
-      setTimeout(() => {
-        const odLink = document.querySelector('[data-page="odemeler"]');
-        if (odLink) navigateTo('odemeler', odLink);
-        else renderOdemelerPage();
-      }, 800);
+      // Backend kullanıcı rolünü 'uye' ye yükselttiyse oturumu yenile
+      checkSession().then(() => {
+        setTimeout(() => {
+          const odLink = document.querySelector('[data-page="odemeler"]');
+          if (odLink) navigateTo('odemeler', odLink);
+          else renderOdemelerPage();
+        }, 800);
+      });
     } else {
       showToast('❌ ' + (data.mesaj || 'Bir hata oluştu!'));
     }
@@ -2285,7 +2288,7 @@ function handleForgot() {
     closeForgotModal();
     if(data.token) {
       console.log('%c [TEST] Şifre Sıfırlama Linki: ', 'background: #222; color: #bada55; font-size: 14px;');
-      console.log('http://13.53.225.142:8080/?resetToken=' + data.token);
+      console.log(API_URL + '/?resetToken=' + data.token);
       console.log('%c E-posta sunucunuz yapılandırılmamışsa yukarıdaki linki kullanarak test edebilirsiniz.', 'color: #888;');
     }
     showToast(data.mesaj);
@@ -2340,15 +2343,17 @@ let registeredUsers = JSON.parse(localStorage.getItem('fitzone_users')) || [...d
 let activeUser = null;
 
 // Rol etiketleri
-const rolLabels = { admin: 'Süper Admin', uye: 'Üye', antrenor: 'Antrenör' };
+const rolLabels = { admin: 'Süper Admin', uye: 'Üye', kullanici: 'Üye', antrenor: 'Antrenör' };
 
 function loginAs(role, user) {
-  currentRole = role;
+  // 'kullanici' rolü henüz aboneliği olmayan kayıtlı kullanıcıdır; 'uye' paneliyle gösterilir
+  const effectiveRole = (role === 'kullanici') ? 'uye' : role;
+  currentRole = effectiveRole;
   activeUser = user || null;
-  if (user) { roleProfiles[role] = { name: user.name, email: user.email, rol: role }; }
+  if (user) { roleProfiles[effectiveRole] = { name: user.name, email: user.email, rol: effectiveRole }; }
 
-  const displayName = user ? user.name : (role === 'admin' ? 'Admin Yönetici' : 'Kullanıcı');
-  const displayRole = rolLabels[role] || role;
+  const displayName = user ? user.name : (effectiveRole === 'admin' ? 'Admin Yönetici' : 'Kullanıcı');
+  const displayRole = rolLabels[effectiveRole] || effectiveRole;
   const initials    = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   // Update sidebar user info
@@ -2357,15 +2362,15 @@ function loginAs(role, user) {
   document.getElementById('sidebarUserRole').textContent  = displayRole;
 
   // Filter sidebar items by role
-  applySidebarRole(role);
+  applySidebarRole(effectiveRole);
 
   // Stats grid: sadece admin'de görünür
   const statsGrid = document.querySelector('#page-dashboard .stats-grid');
-  if (statsGrid) statsGrid.style.display = role === 'admin' ? '' : 'none';
+  if (statsGrid) statsGrid.style.display = effectiveRole === 'admin' ? '' : 'none';
 
-  const isUye     = role === 'uye';
-  const isAntrenor = role === 'antrenor';
-  const isAdmin   = role === 'admin';
+  const isUye     = effectiveRole === 'uye';
+  const isAntrenor = effectiveRole === 'antrenor';
+  const isAdmin   = effectiveRole === 'admin';
 
   // Admin-only büyük bölümler (grafik+sağpanel, üye listesi, seans/ders ekle butonları)
   ['adminContentGrid', 'adminMembersGrid', 'adminAddProgramBtn', 'adminAddClassBtn'].forEach(id => {
