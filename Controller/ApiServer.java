@@ -1047,18 +1047,33 @@ public class ApiServer {
         @Override
         public void handle(HttpExchange ex) throws IOException {
             if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
-            if (!requireAuth(ex)) return;
+            String[] u = authUser(ex);
+            if (u == null) { sendResponse(ex, 401, "Auth Error"); return; }
+            int kId = Integer.parseInt(u[0]);
+            String role = u[2];
 
             try {
                 Connection conn=DatabaseBaglanti.baglantiGetir();
-                Statement stmt=conn.createStatement();
+                
+                Integer antrenorId = null;
+                if ("antrenor".equals(role)) {
+                    PreparedStatement psA = conn.prepareStatement("SELECT antrenor_id FROM antrenorler WHERE kullanici_id=?");
+                    psA.setInt(1, kId);
+                    ResultSet rsA = psA.executeQuery();
+                    if (rsA.next()) antrenorId = rsA.getInt("antrenor_id");
+                    rsA.close(); psA.close();
+                }
 
-                ResultSet rs=stmt.executeQuery(
-                    "SELECT s.ders_id,s.ders_adi,k.ad+' '+k.soyad AS antrenor," +
-                    "s.kontenjan,s.sure_dakika,s.kategori,s.durum " +
-                    "FROM siniflar s " +
-                    "LEFT JOIN antrenorler a ON s.antrenor_id=a.antrenor_id " +
-                    "LEFT JOIN kullanicilar k ON a.kullanici_id=k.kullanici_id");
+                // 1. Dersler
+                String qDersler = "SELECT s.ders_id,s.ders_adi,k.ad+' '+k.soyad AS antrenor," +
+                                 "s.kontenjan,s.sure_dakika,s.kategori,s.durum " +
+                                 "FROM siniflar s " +
+                                 "LEFT JOIN antrenorler a ON s.antrenor_id=a.antrenor_id " +
+                                 "LEFT JOIN kullanicilar k ON a.kullanici_id=k.kullanici_id";
+                if (antrenorId != null) qDersler += " WHERE s.antrenor_id=" + antrenorId;
+                
+                Statement stmt=conn.createStatement();
+                ResultSet rs=stmt.executeQuery(qDersler);
                 StringBuilder dJ=new StringBuilder("["); boolean f=true;
                 while(rs.next()) {
                     if(!f) dJ.append(","); f=false;
@@ -1070,14 +1085,17 @@ public class ApiServer {
                 }
                 dJ.append("]"); rs.close();
 
-                ResultSet r2=stmt.executeQuery(
-                    "SELECT sp.program_id,s.ders_adi,sp.gun," +
-                    "CONVERT(VARCHAR(5),sp.baslangic_saati,108)AS bSaat," +
-                    "CONVERT(VARCHAR(5),sp.bitis_saati,108)AS bsSaat," +
-                    "sp.salon,sp.durum FROM sinif_programlari sp " +
-                    "JOIN siniflar s ON sp.ders_id=s.ders_id " +
-                    "ORDER BY CASE sp.gun WHEN N'Pazartesi' THEN 1 WHEN N'Salı' THEN 2 WHEN N'Çarşamba' THEN 3 " +
-                    "WHEN N'Perşembe' THEN 4 WHEN N'Cuma' THEN 5 WHEN N'Cumartesi' THEN 6 WHEN N'Pazar' THEN 7 END");
+                // 2. Program
+                String qProg = "SELECT sp.program_id,s.ders_adi,sp.gun," +
+                              "CONVERT(VARCHAR(5),sp.baslangic_saati,108)AS bSaat," +
+                              "CONVERT(VARCHAR(5),sp.bitis_saati,108)AS bsSaat," +
+                              "sp.salon,sp.durum FROM sinif_programlari sp " +
+                              "JOIN siniflar s ON sp.ders_id=s.ders_id ";
+                if (antrenorId != null) qProg += " WHERE s.antrenor_id=" + antrenorId;
+                qProg += " ORDER BY CASE sp.gun WHEN N'Pazartesi' THEN 1 WHEN N'Salı' THEN 2 WHEN N'Çarşamba' THEN 3 " +
+                         "WHEN N'Perşembe' THEN 4 WHEN N'Cuma' THEN 5 WHEN N'Cumartesi' THEN 6 WHEN N'Pazar' THEN 7 END";
+                
+                ResultSet r2=stmt.executeQuery(qProg);
                 StringBuilder pJ=new StringBuilder("["); f=true;
                 while(r2.next()) {
                     if(!f) pJ.append(","); f=false;
@@ -1088,15 +1106,19 @@ public class ApiServer {
                 }
                 pJ.append("]"); r2.close();
 
-                ResultSet r3=stmt.executeQuery(
-                    "SELECT r.rezervasyon_id,k.ad+' '+k.soyad AS uye,s.ders_adi," +
-                    "CONVERT(VARCHAR(10),r.r_tarih,120)AS tarih," +
-                    "CONVERT(VARCHAR(5),sp.baslangic_saati,108)+'-'+CONVERT(VARCHAR(5),sp.bitis_saati,108)AS saat," +
-                    "r.durum FROM sinif_rezervasyonlari r " +
-                    "JOIN uyeler u ON r.uye_id=u.uye_id " +
-                    "JOIN kullanicilar k ON u.kullanici_id=k.kullanici_id " +
-                    "JOIN sinif_programlari sp ON r.program_id=sp.program_id " +
-                    "JOIN siniflar s ON sp.ders_id=s.ders_id ORDER BY r.r_tarih DESC");
+                // 3. Rezervasyonlar
+                String qRez = "SELECT r.rezervasyon_id,k.ad+' '+k.soyad AS uye,s.ders_adi," +
+                             "CONVERT(VARCHAR(10),r.r_tarih,120)AS tarih," +
+                             "CONVERT(VARCHAR(5),sp.baslangic_saati,108)+'-'+CONVERT(VARCHAR(5),sp.bitis_saati,108)AS saat," +
+                             "r.durum FROM sinif_rezervasyonlari r " +
+                             "JOIN uyeler u ON r.uye_id=u.uye_id " +
+                             "JOIN kullanicilar k ON u.kullanici_id=k.kullanici_id " +
+                             "JOIN sinif_programlari sp ON r.program_id=sp.program_id " +
+                             "JOIN siniflar s ON sp.ders_id=s.ders_id ";
+                if (antrenorId != null) qRez += " WHERE s.antrenor_id=" + antrenorId;
+                qRez += " ORDER BY r.r_tarih DESC";
+
+                ResultSet r3=stmt.executeQuery(qRez);
                 StringBuilder rJ=new StringBuilder("["); f=true;
                 while(r3.next()) {
                     if(!f) rJ.append(","); f=false;
@@ -1128,7 +1150,11 @@ public class ApiServer {
                 ResultSet rs=stmt.executeQuery(
                     "SELECT a.antrenor_id,k.ad+' '+k.soyad AS isim,k.email," +
                     "a.uzmanlik,a.deneyim_yili,a.sertifikalar,a.biyografi,a.durum," +
-                    "(SELECT COUNT(*) FROM siniflar s WHERE s.antrenor_id=a.antrenor_id)AS dersCount " +
+                    "(SELECT COUNT(*) FROM siniflar s WHERE s.antrenor_id=a.antrenor_id) AS dersCount, " +
+                    "(SELECT COUNT(DISTINCT r.uye_id) FROM sinif_rezervasyonlari r " +
+                    " JOIN sinif_programlari sp ON r.program_id=sp.program_id " +
+                    " JOIN siniflar s ON sp.ders_id=s.ders_id " +
+                    " WHERE s.antrenor_id=a.antrenor_id AND r.durum=N'aktif') AS studentCount " +
                     "FROM antrenorler a JOIN kullanicilar k ON a.kullanici_id=k.kullanici_id");
                 StringBuilder json=new StringBuilder("["); boolean f=true;
                 while(rs.next()) {
@@ -1136,14 +1162,14 @@ public class ApiServer {
                     json.append(String.format(
                         "{\"id\":%d,\"isim\":\"%s\",\"email\":\"%s\"," +
                         "\"uzmanlik\":\"%s\",\"deneyim\":%d,\"sertifikalar\":\"%s\"," +
-                        "\"biyografi\":\"%s\",\"durum\":\"%s\",\"dersCount\":%d}",
+                        "\"biyografi\":\"%s\",\"durum\":\"%s\",\"dersCount\":%d,\"studentCount\":%d}",
                         rs.getInt("antrenor_id"),rs.getString("isim"),
                         rs.getString("email")!=null?rs.getString("email"):"",
                         rs.getString("uzmanlik")!=null?rs.getString("uzmanlik").replace("\"","'"):"",
                         rs.getInt("deneyim_yili"),
                         rs.getString("sertifikalar")!=null?rs.getString("sertifikalar").replace("\"","'"):"",
                         rs.getString("biyografi")!=null?rs.getString("biyografi").replace("\"","'"):"",
-                        rs.getString("durum"),rs.getInt("dersCount")));
+                        rs.getString("durum"),rs.getInt("dersCount"),rs.getInt("studentCount")));
                 }
                 json.append("]");
                 rs.close(); stmt.close();
@@ -1161,20 +1187,43 @@ public class ApiServer {
         @Override
         public void handle(HttpExchange ex) throws IOException {
             if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
-            if (!requireRole(ex,"admin","antrenor")) return;
+            String[] u = authUser(ex);
+            if (u == null) { sendResponse(ex, 401, "Auth Error"); return; }
+            int kId = Integer.parseInt(u[0]);
+            String role = u[2];
+
             try {
                 Connection conn=DatabaseBaglanti.baglantiGetir();
+                
+                Integer antrenorId = null;
+                if ("antrenor".equals(role)) {
+                    PreparedStatement psA = conn.prepareStatement("SELECT antrenor_id FROM antrenorler WHERE kullanici_id=?");
+                    psA.setInt(1, kId);
+                    ResultSet rsA = psA.executeQuery();
+                    if (rsA.next()) antrenorId = rsA.getInt("antrenor_id");
+                    rsA.close(); psA.close();
+                }
+
                 Statement stmt=conn.createStatement();
                 // 1. İstatistikleri hesapla
-                ResultSet rsStats = stmt.executeQuery(
-                    "SELECT " +
+                String qStats = "SELECT " +
                     "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE CAST(giris_saat AS DATE) = CAST(GETDATE() AS DATE)) + " +
                     "  (SELECT COUNT(*) FROM sinif_rezervasyonlari WHERE CAST(r_tarih AS DATE) = CAST(GETDATE() AS DATE) AND durum=N'aktif') AS bugunGiris, " +
                     "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE durum=N'giris') + " +
                     "  (SELECT COUNT(*) FROM sinif_rezervasyonlari WHERE CAST(r_tarih AS DATE) = CAST(GETDATE() AS DATE) AND durum=N'aktif') AS iceride, " +
                     "  (SELECT COUNT(*) FROM giris_cikis_kayitlari WHERE durum=N'cikis') AS cikisYapan, " +
-                    "  (SELECT COUNT(DISTINCT giris_turu) FROM giris_cikis_kayitlari) AS turSayisi");
+                    "  (SELECT COUNT(DISTINCT giris_turu) FROM giris_cikis_kayitlari) AS turSayisi";
                 
+                // Antrenör ise sadece kendi derslerine girenleri görsün (istatistiklerde de)
+                if (antrenorId != null) {
+                    qStats = "SELECT " +
+                        "  (SELECT COUNT(*) FROM sinif_rezervasyonlari r JOIN sinif_programlari sp ON r.program_id=sp.program_id JOIN siniflar s ON sp.ders_id=s.ders_id WHERE s.antrenor_id="+antrenorId+" AND CAST(r.r_tarih AS DATE)=CAST(GETDATE() AS DATE) AND r.durum=N'aktif') AS bugunGiris, " +
+                        "  (SELECT COUNT(*) FROM sinif_rezervasyonlari r JOIN sinif_programlari sp ON r.program_id=sp.program_id JOIN siniflar s ON sp.ders_id=s.ders_id WHERE s.antrenor_id="+antrenorId+" AND CAST(r.r_tarih AS DATE)=CAST(GETDATE() AS DATE) AND r.durum=N'aktif') AS iceride, " +
+                        "  0 AS cikisYapan, " +
+                        "  1 AS turSayisi";
+                }
+
+                ResultSet rsStats = stmt.executeQuery(qStats);
                 int bugunGiris=0, iceride=0, cikisYapan=0, turSayisi=0;
                 if(rsStats.next()){
                     bugunGiris = rsStats.getInt("bugunGiris");
@@ -1185,15 +1234,15 @@ public class ApiServer {
                 rsStats.close();
 
                 // 2. Kayıtları getir
-                ResultSet rs=stmt.executeQuery(
-                    "SELECT * FROM (" +
+                String qLogs = "SELECT * FROM (" +
                     "  SELECT k.ad + ' ' + k.soyad AS isim, " +
                     "         FORMAT(g.giris_saat, 'HH:mm') AS giris, " +
                     "         ISNULL(FORMAT(g.cikis_saat, 'HH:mm'), '') AS cikis, " +
                     "         g.giris_turu AS turu, " +
                     "         g.durum, " +
                     "         g.giris_saat AS srt, " +
-                    "         N'Giriş Kaydı' AS aciklama " +
+                    "         N'Giriş Kaydı' AS aciklama, " +
+                    "         0 AS ant_id " +
                     "  FROM giris_cikis_kayitlari g " +
                     "  JOIN kullanicilar k ON g.kullanici_id = k.kullanici_id " +
                     "  UNION ALL " +
@@ -1203,14 +1252,19 @@ public class ApiServer {
                     "         'normal' AS turu, " +
                     "         'giris' AS durum, " +
                     "         r.olusturma_tarihi AS srt, " +
-                    "         s.ders_adi AS aciklama " +
+                    "         s.ders_adi AS aciklama, " +
+                    "         s.antrenor_id AS ant_id " +
                     "  FROM sinif_rezervasyonlari r " +
                     "  JOIN uyeler u ON r.uye_id = u.uye_id " +
                     "  JOIN kullanicilar k ON u.kullanici_id = k.kullanici_id " +
                     "  JOIN sinif_programlari sp ON r.program_id = sp.program_id " +
                     "  JOIN siniflar s ON sp.ders_id = s.ders_id " +
                     "  WHERE r.durum = N'aktif' AND CAST(r.r_tarih AS DATE) = CAST(GETDATE() AS DATE) " +
-                    ") AS combined ORDER BY srt DESC");
+                    ") AS combined ";
+                if (antrenorId != null) qLogs += " WHERE ant_id=" + antrenorId;
+                qLogs += " ORDER BY srt DESC";
+
+                ResultSet rs=stmt.executeQuery(qLogs);
                 
                 StringBuilder json=new StringBuilder("{\"stats\":{");
                 json.append(String.format("\"bugunGiris\":%d,\"iceride\":%d,\"cikisYapan\":%d,\"turSayisi\":%d", 
@@ -1918,8 +1972,9 @@ public class ApiServer {
             String uzmanlik= jsonValue(body,"uzmanlik");
             String deneyim = jsonValue(body,"deneyim");
             String sertif  = jsonValue(body,"sertifikalar");
+            String sifre   = jsonValue(body,"sifre");
 
-            if (ad==null || soyad==null || email==null) {
+            if (ad==null || soyad==null || email==null || sifre==null) {
                 sendResponse(ex,400,errJson("Eksik alanlar!","BAD_REQUEST")); return;
             }
 
@@ -1927,9 +1982,7 @@ public class ApiServer {
                 Connection conn = DatabaseBaglanti.baglantiGetir();
                 
                 // 1) Kullanicilar tablosuna ekle (rol_id = 3 -> antrenör)
-                // Şifre: e-posta ve 123 birleşimi gibi geçici bir şifre
-                String tempSifre = "123456"; 
-                String sifreHash = hashPassword(tempSifre);
+                String sifreHash = hashPassword(sifre);
                 
                 String q1 = "INSERT INTO kullanicilar (ad, soyad, email, sifre_hash, telefon, rol_id, durum) VALUES (?,?,?,?,?,3,'aktif')";
                 PreparedStatement ps1 = conn.prepareStatement(q1, Statement.RETURN_GENERATED_KEYS);
@@ -2235,10 +2288,42 @@ public class ApiServer {
                 String[] u = authUser(ex);
                 int kid = Integer.parseInt(u[0]);
                 Connection conn = DatabaseBaglanti.baglantiGetir();
+                
+                // 1) Aktif abonelik kontrolü
+                PreparedStatement psAb = conn.prepareStatement(
+                    "SELECT a.abonelik_id FROM uye_abonelikleri a " +
+                    "JOIN uyeler u ON a.uye_id = u.uye_id " +
+                    "WHERE u.kullanici_id=? AND a.durum=N'aktif'");
+                psAb.setInt(1, kid);
+                ResultSet rsAb = psAb.executeQuery();
+                if(!rsAb.next()){
+                    rsAb.close(); psAb.close();
+                    sendResponse(ex, 403, "{\"hata\":\"Aktif aboneliğiniz bulunmuyor. Lütfen önce bir plan satın alın ve ödemesini yapın.\"}");
+                    return;
+                }
+                rsAb.close(); psAb.close();
+
+                // 2) Kontenjan kontrolü
+                PreparedStatement psK = conn.prepareStatement(
+                    "SELECT s.kontenjan, (SELECT COUNT(*) FROM sinif_rezervasyonlari r WHERE r.program_id=sp.program_id AND r.durum=N'aktif' AND r.r_tarih=CAST(GETDATE() AS DATE)) AS dolu " +
+                    "FROM sinif_programlari sp JOIN siniflar s ON sp.ders_id=s.ders_id WHERE sp.program_id=?");
+                psK.setInt(1, programId);
+                ResultSet rsK = psK.executeQuery();
+                if(rsK.next()){
+                    if(rsK.getInt("dolu") >= rsK.getInt("kontenjan")){
+                        rsK.close(); psK.close();
+                        sendResponse(ex, 400, "{\"hata\":\"Bu dersin kontenjanı dolmuştur!\"}");
+                        return;
+                    }
+                }
+                rsK.close(); psK.close();
+
+                // 3) Rezervasyon ekle
                 PreparedStatement psU = conn.prepareStatement("SELECT uye_id FROM uyeler WHERE kullanici_id=?");
                 psU.setInt(1, kid); ResultSet rsU = psU.executeQuery();
                 if(!rsU.next()) { sendResponse(ex, 403, "{\"hata\":\"Profil yok\"}"); return; }
                 int uid = rsU.getInt(1); rsU.close(); psU.close();
+                
                 PreparedStatement ps = conn.prepareStatement("INSERT INTO sinif_rezervasyonlari (uye_id, program_id, r_tarih, durum) VALUES (?, ?, CAST(GETDATE() AS DATE), N'aktif')");
                 ps.setInt(1, uid); ps.setInt(2, programId);
                 ps.executeUpdate(); ps.close();

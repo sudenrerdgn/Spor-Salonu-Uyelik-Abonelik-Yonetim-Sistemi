@@ -1643,12 +1643,15 @@ function renderDerslerPage() {
               if (!uyeAktifPlan || planLimit === 0) {
                 // Basic veya abonelik yok — kilitli buton
                 actionBtn = `<button disabled style="padding:6px 12px; font-size:11px; border-radius:8px; background:rgba(148,163,184,.1); border:1px solid rgba(148,163,184,.15); color:#94a3b8; cursor:not-allowed; display:flex; align-items:center; gap:5px;" title="${!uyeAktifPlan ? 'Aktif abonelik gerekli' : 'Basic planda ders seçilemez'}"><i class="fas fa-lock" style="font-size:10px;"></i> ${!uyeAktifPlan ? 'Abonelik Gerekli' : 'Kilitli'}</button>`;
-              } else if (planLimit !== Infinity && kalanHak <= 0) {
+              } else if (prog && planLimit !== Infinity && kalanHak <= 0) {
                 // Silver ve hak dolmuş
                 actionBtn = `<button disabled style="padding:6px 12px; font-size:11px; border-radius:8px; background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.2); color:#fbbf24; cursor:not-allowed; display:flex; align-items:center; gap:5px;" title="Ders seçim hakkınız doldu"><i class="fas fa-exclamation-circle" style="font-size:10px;"></i> Hak Doldu</button>`;
-              } else {
+              } else if (prog) {
                 // Hak var — aktif buton
-                actionBtn = `<button class="btn-primary" style="padding:6px 12px; font-size:11px; border-radius:8px;" onclick="bookClass(${targetId})"><i class="fas fa-calendar-plus" style="margin-right:5px;"></i> Rezervasyon Yap</button>`;
+                actionBtn = `<button class="btn-primary" style="padding:6px 12px; font-size:11px; border-radius:8px;" onclick="bookClass(${d.id}, ${prog.id})"><i class="fas fa-calendar-plus" style="margin-right:5px;"></i> Rezervasyon Yap</button>`;
+              } else {
+                // Program yok
+                actionBtn = `<button disabled style="padding:6px 12px; font-size:11px; border-radius:8px; background:rgba(148,163,184,.05); border:1px solid rgba(148,163,184,.1); color:#94a3b8; cursor:not-allowed;">Seans Yok</button>`;
               }
           } else {
               actionBtn = `<div style="display:flex;gap:6px;justify-content:flex-end;"><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Düzenle" onclick="openEditClassModal(${d.id})"><i class="fas fa-pen"></i></div><div class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:11px;cursor:pointer" title="Sil" onclick="openDeleteModal('ders',${d.id},'${d.ders}')"><i class="fas fa-trash" style="color:#f87171"></i></div></div>`;
@@ -1761,7 +1764,7 @@ function renderAntrenorlerPage() {
           <div class="trainer-stats">
             <div class="trainer-stat"><div class="trainer-stat-value">${t.deneyim}</div><div class="trainer-stat-label">Yıl Deneyim</div></div>
             <div class="trainer-stat"><div class="trainer-stat-value">${t.dersCount}</div><div class="trainer-stat-label">Aktif Ders</div></div>
-            <div class="trainer-stat"><div class="trainer-stat-value">—</div><div class="trainer-stat-label">Öğrenci</div></div>
+            <div class="trainer-stat"><div class="trainer-stat-value">${t.studentCount || 0}</div><div class="trainer-stat-label">Öğrenci</div></div>
           </div>
           <div style="margin-bottom:10px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;">Sertifikalar</div><div class="trainer-certs">${certs || '—'}</div></div>
           <div class="trainer-bio" style="margin-bottom:10px;">${t.biyografi || ''}</div>
@@ -2688,8 +2691,8 @@ function renderAntrenorWeeklyCalendar() {
   const container = document.getElementById('antrenorWeeklyCalendar');
   if (!container) return;
 
-  const currentProfile = roleProfiles[currentRole]; // Kemal Antrenör
-  const gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+  const currentProfile = roleProfiles[currentRole]; 
+  const gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
   const dersRenkleri = {
     'Yoga Flow':           { bg:'rgba(139,92,246,.15)',  color:'#a78bfa', icon:'🧘' },
@@ -2699,63 +2702,68 @@ function renderAntrenorWeeklyCalendar() {
     'Pilates':             { bg:'rgba(74,222,128,.12)',  color:'#4ade80', icon:'🤸' },
   };
 
-  // Sadece bu antrenörün derslerini filtrele
-  const benimDersler = derslerDemoData
-    .filter(d => d.antrenor === currentProfile.name)
-    .map(d => d.ders);
+  apiFetch('/api/dersler').then(data => {
+    // Backend zaten bu antrenörün derslerini filtreliyor (Step 1'de yaptık)
+    const programMap = {};
+    gunler.forEach(g => programMap[g] = []);
+    (data.program || []).forEach(p => {
+      if (programMap[p.gun]) programMap[p.gun].push(p);
+    });
 
-  // Programa göre bu antrenörün derslerini günlere yaz
-  const programMap = {};
-  gunler.forEach(g => programMap[g] = []);
-  programData.forEach(p => {
-    if (programMap[p.gun] && benimDersler.includes(p.ders)) programMap[p.gun].push(p);
-  });
-
-  let html = `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;min-width:580px;padding:4px 2px 8px;">`;
-  gunler.forEach(gun => {
-    const dersler = programMap[gun] || [];
-    html += `
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:4px 0;border-bottom:1px solid var(--glass-border);">${gun.slice(0,3)}</div>
-    `;
-    if (dersler.length === 0) {
-      html += `<div style="text-align:center;color:var(--text-muted);font-size:20px;padding:16px 0;">—</div>`;
-    } else {
-      dersler.forEach(d => {
-        const r = dersRenkleri[d.ders] || { bg:'rgba(100,116,139,.12)', color:'#94a3b8', icon:'📋' };
-        html += `
-          <div style="background:${r.bg};border:1px solid ${r.color}35;border-radius:10px;padding:9px 7px;cursor:default;transition:transform .15s,box-shadow .15s;"
-               onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px ${r.color}30'"
-               onmouseout="this.style.transform='';this.style.boxShadow=''">
-            <div style="font-size:18px;text-align:center;margin-bottom:4px;">${r.icon}</div>
-            <div style="font-size:10px;font-weight:700;color:${r.color};text-align:center;line-height:1.3;">${d.ders}</div>
-            <div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:3px;">${d.saat}</div>
-            <div style="font-size:9px;color:var(--text-muted);text-align:center;">${d.salon}</div>
-          </div>`;
-      });
-    }
+    let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;min-width:700px;padding:4px 2px 8px;">`;
+    gunler.forEach(gun => {
+      const dersler = programMap[gun] || [];
+      html += `
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:4px 0;border-bottom:1px solid var(--glass-border);">${gun.slice(0,3)}</div>
+      `;
+      if (dersler.length === 0) {
+        html += `<div style="text-align:center;color:var(--text-muted);font-size:20px;padding:16px 0;">—</div>`;
+      } else {
+        dersler.forEach(d => {
+          const r = dersRenkleri[d.ders] || { bg:'rgba(100,116,139,.12)', color:'#94a3b8', icon:'📋' };
+          html += `
+            <div style="background:${r.bg};border:1px solid ${r.color}35;border-radius:10px;padding:9px 7px;cursor:default;transition:transform .15s,box-shadow .15s;"
+                 onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px ${r.color}30'"
+                 onmouseout="this.style.transform='';this.style.boxShadow=''">
+              <div style="font-size:18px;text-align:center;margin-bottom:4px;">${r.icon}</div>
+              <div style="font-size:10px;font-weight:700;color:${r.color};text-align:center;line-height:1.3;">${d.ders}</div>
+              <div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:3px;">${d.saat}</div>
+              <div style="font-size:9px;color:var(--text-muted);text-align:center;">${d.salon}</div>
+            </div>`;
+        });
+      }
+      html += `</div>`;
+    });
     html += `</div>`;
-  });
-  html += `</div>`;
-  container.innerHTML = html;
+    container.innerHTML = html;
 
-  // Ders listesini render et
-  renderAntrenorDersListesi(benimDersler);
+    // Ders listesini de render et
+    renderAntrenorDersListesi(data.dersler);
+  }).catch(() => {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Program yüklenemedi.</div>';
+  });
 }
 
-function renderAntrenorDersListesi(benimDersler) {
+function renderAntrenorDersListesi(benimDerslerData) {
   const container = document.getElementById('antrenorDersListesi');
   if (!container) return;
   const dersRenkleri = {
-    'Yoga Flow':           { color:'#a78bfa', icon:'🧘', katilim:80 },
-    'Kickboks':            { color:'#f472b6', icon:'🥊', katilim:90 },
-    'Aqua Aerobik':        { color:'#00d4ff', icon:'🏊', katilim:53 },
-    'Fonksiyonel Fitness': { color:'#fb923c', icon:'🏋️', katilim:75 },
-    'Pilates':             { color:'#4ade80', icon:'🤸', katilim:67 },
+    'Yoga Flow':           { color:'#a78bfa', icon:'🧘' },
+    'Kickboks':            { color:'#f472b6', icon:'🥊' },
+    'Aqua Aerobik':        { color:'#00d4ff', icon:'🏊' },
+    'Fonksiyonel Fitness': { color:'#fb923c', icon:'🏋️' },
+    'Pilates':             { color:'#4ade80', icon:'🤸' },
   };
   container.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0;">';
-  derslerDemoData.filter(d => benimDersler.includes(d.ders)).forEach(d => {
-    const r = dersRenkleri[d.ders] || { color:'#94a3b8', icon:'📋', katilim:0 };
+  
+  if (!benimDerslerData || benimDerslerData.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px;">Henüz aktif dersiniz bulunmuyor.</div>';
+      return;
+  }
+
+  benimDerslerData.forEach(d => {
+    const r = dersRenkleri[d.ders] || { color:'#94a3b8', icon:'📋' };
     container.innerHTML += `
       <div class="plan-card">
         <div class="plan-left">
@@ -2765,7 +2773,7 @@ function renderAntrenorDersListesi(benimDersler) {
             <div class="plan-members">${d.sure} dk · ${d.kontenjan} kişi · ${d.kategori}</div>
           </div>
         </div>
-        <div style="font-size:11px;background:${r.color}18;color:${r.color};padding:4px 10px;border-radius:20px;font-weight:700;">%${r.katilim}</div>
+        <div style="font-size:11px;background:${r.color}18;color:${r.color};padding:4px 10px;border-radius:20px;font-weight:700;">Aktif</div>
       </div>`;
   });
   container.innerHTML += '</div>';
@@ -2780,59 +2788,61 @@ function renderAntrenorKatilimChart() {
   if (!ctx) return;
   if (antrenorKatilimChartInstance) antrenorKatilimChartInstance.destroy();
 
-  const currentProfile = roleProfiles[currentRole];
-  const benimDersler = derslerDemoData
-    .filter(d => d.antrenor === currentProfile.name);
+  apiFetch('/api/dersler').then(data => {
+    const labels = data.dersler.map(d => d.ders);
+    if (labels.length === 0) return;
 
-  const labels = benimDersler.map(d => d.ders);
-  const katilimMap = {
-    'Kickboks':90,'Fonksiyonel Fitness':75,'Yoga Flow':80,'Aqua Aerobik':53,'Pilates':67
-  };
-  const data   = benimDersler.map(d => katilimMap[d.ders] || 70);
-  const colors = ['#f472b6','#fb923c','#a78bfa','#00d4ff','#4ade80'];
+    // Gerçek katılım oranlarını rezervasyonlardan hesaplayalım
+    const dataValues = data.dersler.map(d => {
+        const rezCount = (data.rezervasyonlar || []).filter(r => r.ders === d.ders && r.durum === 'aktif').length;
+        return Math.min(100, Math.round((rezCount / (d.kontenjan || 20)) * 100));
+    });
 
-  antrenorKatilimChartInstance = new Chart(ctx.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Katılım %',
-        data,
-        backgroundColor: colors.slice(0, labels.length).map(c => c + 'CC'),
-        borderColor:     colors.slice(0, labels.length),
-        borderWidth: 1.5,
-        borderRadius: 10,
-        borderSkipped: false,
-        barThickness: 30,
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(15,20,40,0.95)',
-          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
-          titleColor: '#f0f4ff', bodyColor: '#94a3b8',
-          padding: 10, cornerRadius: 8,
-          callbacks: { label: c => `Katılım: %${c.parsed.x}` }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: 'rgba(200,210,255,0.5)', font: { size: 11 }, callback: v => '%' + v },
-          border: { display: false }, min: 0, max: 100
+    const colors = ['#f472b6','#fb923c','#a78bfa','#00d4ff','#4ade80','#6366f1','#ec4899'];
+
+    antrenorKatilimChartInstance = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+        labels,
+        datasets: [{
+            label: 'Katılım %',
+            data: dataValues,
+            backgroundColor: colors.slice(0, labels.length).map(c => c + 'CC'),
+            borderColor:     colors.slice(0, labels.length),
+            borderWidth: 1.5,
+            borderRadius: 10,
+            borderSkipped: false,
+            barThickness: 30,
+        }]
         },
-        y: {
-          grid: { display: false },
-          ticks: { color: 'rgba(200,210,255,0.6)', font: { size: 11 } },
-          border: { display: false }
+        options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+            backgroundColor: 'rgba(15,20,40,0.95)',
+            borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+            titleColor: '#f0f4ff', bodyColor: '#94a3b8',
+            padding: 10, cornerRadius: 8,
+            callbacks: { label: c => `Katılım: %${c.parsed.x}` }
+            }
+        },
+        scales: {
+            x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: 'rgba(200,210,255,0.5)', font: { size: 11 }, callback: v => '%' + v },
+            border: { display: false }, min: 0, max: 100
+            },
+            y: {
+            grid: { display: false },
+            ticks: { color: 'rgba(200,210,255,0.6)', font: { size: 11 } },
+            border: { display: false }
+            }
         }
-      }
-    }
+        }
+    });
   });
 }
 
@@ -2849,6 +2859,7 @@ function showAddTrainerModal() {
   document.getElementById('addTrainerUzmanlik').value = '';
   document.getElementById('addTrainerDeneyim').value = '';
   document.getElementById('addTrainerSertifikalar').value = '';
+  document.getElementById('addTrainerSifre').value = '';
   document.getElementById('addTrainerModal').classList.add('open');
 }
 function closeAddTrainerModal() {
@@ -2862,13 +2873,15 @@ function submitAddTrainer() {
   const uzmanlik = document.getElementById('addTrainerUzmanlik').value.trim();
   const deneyim = document.getElementById('addTrainerDeneyim').value.trim();
   const sertifikalar = document.getElementById('addTrainerSertifikalar').value.trim();
+  const sifre = document.getElementById('addTrainerSifre').value.trim();
 
   if (!ad || !soyad || !email) { showToast('Ad, Soyad ve E-posta zorunlu!'); return; }
+  if (!sifre || sifre.length < 6) { showToast('Şifre en az 6 karakter olmalıdır!'); return; }
 
   closeAddTrainerModal();
   apiFetch('/api/antrenor-ekle', {
     method: 'POST',
-    body: JSON.stringify({ ad, soyad, email, telefon, uzmanlik, deneyim, sertifikalar })
+    body: JSON.stringify({ ad, soyad, email, telefon, uzmanlik, deneyim, sertifikalar, sifre })
   }).then(data => {
     showToast(data.mesaj);
     if(data.basarili) renderAntrenorlerPage();
@@ -3100,8 +3113,8 @@ function submitEditTrainer() {
   }).then(res=>{ showToast(res.mesaj); if(res.basarili) renderAntrenorlerPage(); });
 }
 
-function bookClass(classId) {
-    const ders = derslerCachedData.find(d => d.id === classId);
+function bookClass(dersId, programId) {
+    const ders = derslerCachedData.find(d => d.id === dersId);
     if (!ders) return;
 
     // Plan bazlı ders seçim kontrolü
@@ -3124,7 +3137,7 @@ function bookClass(classId) {
     if (confirm(`${ders.ders} dersi için rezervasyon yapmak istediğinize emin misiniz?`)) {
         apiFetch('/api/rezervasyon-yap', {
             method: 'POST',
-            body: JSON.stringify({ program_id: String(classId) })
+            body: JSON.stringify({ program_id: String(programId) })
         }).then(data => {
             showToast(data.mesaj, !data.basarili);
             if (data.basarili) {
