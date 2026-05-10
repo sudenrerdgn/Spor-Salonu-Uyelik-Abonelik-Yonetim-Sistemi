@@ -108,6 +108,7 @@ public class ApiServer {
         server.createContext("/api/rezervasyon-yap",   new RezervasyonYapHandler());
         server.createContext("/api/uye-aktivite",      new UyeAktiviteHandler());
         server.createContext("/api/abonelik-guncelle", new AbonelikGuncelleHandler());
+        server.createContext("/api/public-istatistikler", new PublicIstatistiklerHandler());
         server.createContext("/api/dersler",           new DerslerHandler());
 
         // ── Admin | Antrenör ──────────────────────────────────
@@ -1431,13 +1432,17 @@ public class ApiServer {
                     upd.executeUpdate();
                     upd.close();
                     
-                    System.out.println("📧 E-Posta gönderimi başlatılıyor: " + email);
                     // Gerçekten Mail Gönder (Thread içinde atıyoruz ki API'yi bekletmesin)
                     new Thread(() -> {
-                        MailSender.sendResetMail(email, resetToken);
+                        try {
+                            MailSender.sendResetMail(email, resetToken);
+                        } catch (Throwable t) {
+                            System.err.println("⚠️ E-posta kütüphanesi (javax.mail) bulunamadı veya yüklenemedi. Link konsola yazdırıldı.");
+                            System.err.println("Hata Detayı: " + t.getMessage());
+                        }
                     }).start();
                     
-                    sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Şifre sıfırlama linki e-postanıza gönderildi.\",\"token\":\"\"}");
+                    sendResponse(ex,200,String.format("{\"basarili\":true,\"mesaj\":\"Şifre sıfırlama linki e-postanıza gönderildi.\",\"token\":\"%s\"}", resetToken));
                 } else {
                     sendResponse(ex,200,"{\"basarili\":true,\"mesaj\":\"Eğer bu e-posta sistemimize kayıtlıysa sıfırlama linki gönderilmiştir.\"}");
                 }
@@ -2449,4 +2454,24 @@ public class ApiServer {
         }
     }
 
+    // KAMUYA AÇIK İSTATİSTİKLER — GET /api/public-istatistikler
+    static class PublicIstatistiklerHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if ("OPTIONS".equals(ex.getRequestMethod())) { corsHeaders(ex); ex.sendResponseHeaders(204,-1); return; }
+            try {
+                Connection conn = DatabaseBaglanti.baglantiGetir();
+                Statement stmt = conn.createStatement();
+                
+                ResultSet rs1 = stmt.executeQuery("SELECT COUNT(*) FROM uye_abonelikleri WHERE durum=N'aktif'");
+                int aktifUye = rs1.next() ? rs1.getInt(1) : 0; rs1.close();
+                
+                ResultSet rs2 = stmt.executeQuery("SELECT COUNT(*) FROM siniflar");
+                int dersSayisi = rs2.next() ? rs2.getInt(1) : 0; rs2.close();
+                
+                sendResponse(ex, 200, String.format("{\"aktifUye\":%d,\"dersSayisi\":%d}", aktifUye, dersSayisi));
+                stmt.close();
+            } catch (Exception e) { sendResponse(ex, 500, errJson(e.getMessage(),"ERROR")); }
+        }
+    }
 }

@@ -163,6 +163,26 @@ function getSavedUser() {
   try { return JSON.parse(localStorage.getItem('fitzone_user')); } catch { return null; }
 }
 
+/** loadPublicStats — Açılış sayfası istatistiklerini yükler */
+function loadPublicStats() {
+    fetch('/api/public-istatistikler')
+        .then(res => res.json())
+        .then(data => {
+            const el1 = document.getElementById('aktifUyeStat');
+            const el2 = document.getElementById('dersSayisiStat');
+            if (el1) el1.textContent = (data.aktifUye || 0) + '+';
+            if (el2) el2.textContent = data.dersSayisi || 0;
+        })
+        .catch(err => console.log('Kamu istatistikleri yüklenemedi.'));
+}
+
+// ═══ SAYFA YÜKLENİNCE ═══
+document.addEventListener('DOMContentLoaded', () => {
+    loadPublicStats();
+    // Mevcut init kodları...
+    checkSession();
+});
+
 /**
  * apiFetch — Authorization header'lı fetch wrapper
  * 401/403 alınırsa otomatik çıkış yapılır.
@@ -2264,10 +2284,9 @@ function handleForgot() {
   .then(data => {
     closeForgotModal();
     if(data.token) {
-      console.log('-----------------------------');
-      console.log('SİMÜLEYE EDİLEN E-POSTA (' + email + ')');
-      console.log('Şifre sıfırlama linkiniz: http://localhost:8080/?resetToken=' + data.token);
-      console.log('-----------------------------');
+      console.log('%c [TEST] Şifre Sıfırlama Linki: ', 'background: #222; color: #bada55; font-size: 14px;');
+      console.log('http://localhost:8080/?resetToken=' + data.token);
+      console.log('%c E-posta sunucunuz yapılandırılmamışsa yukarıdaki linki kullanarak test edebilirsiniz.', 'color: #888;');
     }
     showToast(data.mesaj);
   })
